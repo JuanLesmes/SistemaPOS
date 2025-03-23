@@ -1,2 +1,2 @@
-# GestionInventarioMenguante
-GestionInventario es una app de escritorio en Python, diseñada para simplificar la gestión de inventarios. Inspirada en MVC, integra una interfaz gráfica intuitiva con una base de datos, ofreciendo flexibilidad y eficiencia en entornos locales o remotos
+# GestionInventario
+GestionInventario es una aplicación de escritorio desarrollada en Python, diseñada para simplificar y optimizar la gestión de inventarios en negocios de diversos tamaños. Inspirada en el patrón arquitectónico MVC, la aplicación combina una interfaz gráfica intuitiva con el manejo eficiente de datos a través de una base de datos embebida (SQLite) y la posibilidad de conectarse a una base de datos externa MySQL, lo que la hace flexible tanto para entornos locales como remotos.
