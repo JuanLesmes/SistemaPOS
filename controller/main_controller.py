@@ -7,9 +7,21 @@ class MainController:
     def __init__(self, root):
         self.root = root
         self.root.title("InventoryManagement")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)  # Manejar cierre
 
-        # Creamos la instancia de la BD
-        self.db = DBConnection("data/local.db")
+        try:
+            # Configuración de conexión actualizada
+            self.db = DBConnection(
+                db_name="inventario",
+                user="postgres",
+                password="xxx",
+                host="localhost",
+                port="5432"
+            )
+        except Exception as e:
+            tk.messagebox.showerror("Error de conexión", f"No se pudo conectar a la base de datos:\n{e}")
+            self.root.destroy()
+            return
 
         from view.login_view import LoginView
         from view.admin_view import AdminView
@@ -45,6 +57,12 @@ class MainController:
         
         # Mostramos la vista principal
         self.show_login_view()
+
+    def on_close(self):
+        """Manejar el cierre de la aplicación"""
+        if hasattr(self, 'db'):
+            self.db.close_connection()
+        self.root.destroy()
 
     def show_login_view(self):
         self.hide_all_frames()

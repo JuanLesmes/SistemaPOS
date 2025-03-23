@@ -1,31 +1,35 @@
-# controller/voucher_view_controller.py
+import logging
+from utils.printer_manager import XPrinterManager
 
-import tkinter as tk
+logger = logging.getLogger(__name__)
 
 class VoucherViewController:
-    def __init__(self, parent, main_controller):
-        self.parent = parent
+    def __init__(self, main_controller):
         self.main_controller = main_controller
-
-        from view.voucher_view import VoucherView
-        self.view = VoucherView(self.parent, self)
-
-        # PROBLEMA: Estás volviendo a crear el mismo controlador recursivamente
-        # self.voucher_controller = VoucherViewController(self.root, self)
-        # ↑ Esto hay que eliminarlo.
-
-    def load_data(self, receipt_id, fecha_emision, hora_emision, productos, total, vueltas):
-        self.view.load_receipt_data(
-            receipt_id,
-            fecha_emision,
-            hora_emision,
-            productos,
-            total,
-            vueltas
-        )
-
-    def event_go_back_to_sales(self):
-        # Cierra la ventana Toplevel del voucher
-        self.view.destroy()
-        # Regresa a la vista de ventas
-        self.main_controller.show_sales_view()
+        self.printer = XPrinterManager()
+        
+    def print_receipt(self, receipt_data):
+        try:
+            formatted_data = self._format_receipt(receipt_data)
+            self.printer.print_receipt(formatted_data)
+        except Exception as e:
+            logger.error(f"Error al imprimir: {str(e)}")
+            raise
+    
+    def _format_receipt(self, raw_data):
+        """Estandariza el formato para la impresora"""
+        return {
+            'receipt_id': raw_data['receipt_id'],
+            'date': raw_data['date'],
+            'time': raw_data['time'],
+            'items': [
+                {
+                    'qty': item[0],
+                    'name': item[1],
+                    'price': item[2],
+                    'total': item[0] * item[2]
+                } for item in raw_data['items']
+            ],
+            'total': raw_data['total'],
+            'change': raw_data['change']
+        }
