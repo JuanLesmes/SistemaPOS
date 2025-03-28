@@ -8,17 +8,8 @@ class SalesReportView(tk.Frame):
         super().__init__(parent)
         self.controller = controller
         
-        # Colores
-        self.fondo_general = "#9db7b1"
-        self.encabezado = "#10a2a7"
-        self.boton_volver = "#b57426"
-        self.azul = "#0000FF"
-        self.rojo = "#FF0000"
-        self.blanco = "#FFFFFF"
-        self.negro = "#000000"
-        
-        # Configura el tamaño base de la ventana y el color de fondo
-        self.config(width=800, height=600, bg=self.fondo_general)
+        # Configura el tamaño base de la ventana
+        self.config(width=800, height=600)
         self.pack_propagate(False)
         self.pack(fill="both", expand=True)
         
@@ -29,6 +20,13 @@ class SalesReportView(tk.Frame):
         self.create_widgets()
     
     def create_widgets(self):
+        # Paleta de colores
+        turquesa    = "#00BFBF"
+        gris_claro  = "#F0F0F0"
+        blanco      = "#FFFFFF"
+        azul        = "#0000FF"
+        naranja     = "#FFA500"
+        
         # Fuentes
         font_header   = ("Sans-serif", 20, "bold")  # Título principal
         font_label    = ("Sans-serif", 14, "bold")
@@ -36,29 +34,29 @@ class SalesReportView(tk.Frame):
         font_summary  = ("Sans-serif", 14)
         
         # ----------------------------------------------------------------
-        # 1. Encabezado: Título "Reporte De Ventas" sobre fondo encabezado
+        # 1. Encabezado: Título "Reporte De Ventas" sobre fondo turquesa
         # ----------------------------------------------------------------
-        header_frame = tk.Frame(self, bg=self.encabezado, height=60)
+        header_frame = tk.Frame(self, bg=turquesa, height=60)
         header_frame.pack(side="top", fill="x")
         header_frame.pack_propagate(False)
         
         title_label = tk.Label(
             header_frame,
             text="Reporte De Ventas",
-            bg=self.encabezado,
-            fg=self.negro,
+            bg=turquesa,
+            fg="#000000",
             font=font_header
         )
         title_label.place(relx=0.5, rely=0.5, anchor="center")
         
         # ----------------------------------------------------------------
-        # 2. Cuerpo principal: Tabla de ventas (izquierda) y panel derecho
+        # 2. Cuerpo principal: Tabla de ventas y panel derecho (filtros y resumen)
         # ----------------------------------------------------------------
-        body_frame = tk.Frame(self, bg=self.fondo_general)
+        body_frame = tk.Frame(self, bg=gris_claro)
         body_frame.pack(side="top", fill="both", expand=True)
         
         # Sección Izquierda: Tabla de ventas
-        table_frame = tk.Frame(body_frame, bg=self.blanco, bd=1, relief="solid")
+        table_frame = tk.Frame(body_frame, bg=blanco, bd=1, relief="solid")
         table_frame.pack(side="left", fill="both", expand=True, padx=20, pady=20)
         
         columns = ("code", "name", "qty", "total")
@@ -88,21 +86,21 @@ class SalesReportView(tk.Frame):
         self.sales_tree.insert("", "end", values=("", "Tabla sin contenido", "", ""))
         
         # Sección Derecha: Filtros de fecha, resumen de montos y botones
-        right_frame = tk.Frame(body_frame, bg=self.fondo_general, width=250)
+        right_frame = tk.Frame(body_frame, bg=gris_claro, width=250)
         right_frame.pack(side="right", fill="y", padx=20, pady=20)
         right_frame.pack_propagate(False)
         
         # 2.1 Filtros de fecha
-        filters_frame = tk.Frame(right_frame, bg=self.fondo_general)
+        filters_frame = tk.Frame(right_frame, bg=gris_claro)
         filters_frame.pack(side="top", fill="x")
         
-        start_label = tk.Label(filters_frame, text="Fecha Inicio", bg=self.fondo_general, fg=self.negro, font=font_label)
+        start_label = tk.Label(filters_frame, text="Fecha Inicio", bg=gris_claro, fg="#000000", font=font_label)
         start_label.pack(anchor="w", pady=(0,5))
         self.start_date = DateEntry(filters_frame, width=15, background="darkblue",
                                     foreground="white", borderwidth=2, date_pattern="yyyy-mm-dd")
         self.start_date.pack(anchor="w", pady=(0,10))
         
-        end_label = tk.Label(filters_frame, text="Fecha Término", bg=self.fondo_general, fg=self.negro, font=font_label)
+        end_label = tk.Label(filters_frame, text="Fecha Termino", bg=gris_claro, fg="#000000", font=font_label)
         end_label.pack(anchor="w", pady=(0,5))
         self.end_date = DateEntry(filters_frame, width=15, background="darkblue",
                                   foreground="white", borderwidth=2, date_pattern="yyyy-mm-dd")
@@ -111,59 +109,71 @@ class SalesReportView(tk.Frame):
         search_button = tk.Button(
             filters_frame,
             text="Buscar",
-            bg=self.azul,
-            fg=self.blanco,
+            bg=azul,
+            fg=blanco,
             font=font_button,
             bd=0,
             cursor="hand2",
-            command=self.on_search_click
+            command=self.on_search_click  # Llama al evento on_search_click
         )
         search_button.config(width=12, height=1)
         search_button.pack(anchor="w", pady=(10,10))
         
         # 2.2 Resumen de montos
-        summary_frame = tk.Frame(right_frame, bg=self.fondo_general)
+        summary_frame = tk.Frame(right_frame, bg=gris_claro)
         summary_frame.pack(side="top", fill="x", pady=(20, 0))
         
-        total_label = tk.Label(summary_frame, text="Total Recaudado", bg=self.fondo_general, font=("Sans-serif", 16, "bold"))
+        total_label = tk.Label(summary_frame, text="Total Recaudado", bg=gris_claro, font=("Sans-serif", 16, "bold"))
         total_label.pack(anchor="w", pady=(0,0))
-        self.total_amount_label = tk.Label(summary_frame, text="$0", bg=self.fondo_general, font=("Sans-serif", 16, "bold"))
+        self.total_amount_label = tk.Label(summary_frame, text="$0", bg=gris_claro, font=("Sans-serif", 16, "bold"))
         self.total_amount_label.pack(anchor="w", pady=5)
         
-        self.cash_label = tk.Label(summary_frame, text="Efectivo        $0", bg=self.fondo_general, font=font_summary)
+        self.cash_label = tk.Label(summary_frame, text="Efectivo        $0", bg=gris_claro, font=font_summary)
         self.cash_label.pack(anchor="w", pady=5)
-        self.card_label = tk.Label(summary_frame, text="Tarjeta         $0", bg=self.fondo_general, font=font_summary)
+        self.card_label = tk.Label(summary_frame, text="Tarjeta         $0", bg=gris_claro, font=font_summary)
         self.card_label.pack(anchor="w", pady=5)
-        self.transfer_label = tk.Label(summary_frame, text="Transferencia  $0", bg=self.fondo_general, font=font_summary)
+        self.transfer_label = tk.Label(summary_frame, text="Transferencia  $0", bg=gris_claro, font=font_summary)
         self.transfer_label.pack(anchor="w", pady=5)
         
         # 2.3 Botón "Volver al Menú"
         back_button = tk.Button(
             right_frame,
             text="Volver al Menú",
-            bg=self.boton_volver,
-            fg=self.negro,
+            bg=naranja,
+            fg="#000000",
             font=("Sans-serif", 16, "bold"),
             bd=0,
             cursor="hand2",
-            command=self.on_back_click
+            command=self.on_back_click  # Llama al evento on_back_click
         )
         back_button.config(width=14, height=2)
         back_button.pack(side="bottom", pady=20)
-    
+        
+        # Nuevo botón pequeño para limpiar la base de datos, colocado debajo del botón "Volver al Menú"
+        clear_db_button = tk.Button(
+            right_frame,
+            text="Limpiar DB",
+            bg="#FF0000",
+            fg="#FFFFFF",
+            font=("Sans-serif", 10, "bold"),
+            bd=0,
+            cursor="hand2",
+            command=self.on_clear_db_click  # Llama al método que se encargará de limpiar la DB
+        )
+        clear_db_button.config(width=10, height=1)
+        clear_db_button.pack(side="bottom", pady=(0, 5))
+        
     def create_table_styles(self):
         """Define el estilo personalizado para la tabla."""
         style = ttk.Style()
         style.theme_use("clam")
         
-        # Cabecera de la tabla
         style.configure(
             "SalesReport.Treeview.Heading",
-            background=self.encabezado,
-            foreground=self.negro,
+            background="#00BFBF",
+            foreground="#FFFFFF",
             font=("Sans-serif", 14, "bold")
         )
-        # Contenido de la tabla
         style.configure(
             "SalesReport.Treeview",
             font=("Sans-serif", 12),
@@ -171,10 +181,9 @@ class SalesReportView(tk.Frame):
             bordercolor="#D3D3D3",
             borderwidth=1
         )
-        # Color de la fila seleccionada
         style.map(
             "SalesReport.Treeview",
-            background=[("selected", self.fondo_general)]
+            background=[("selected", "#00BFBF")]
         )
     
     # Métodos para obtener la fecha seleccionada
@@ -198,8 +207,7 @@ class SalesReportView(tk.Frame):
         # Inserta cada producto vendido en la tabla, formateando el total con separador de miles
         for sp in sold_products:
             self.sales_tree.insert(
-                "",
-                "end",
+                "", "end",
                 values=(
                     sp.get_code(),
                     sp.product.name,
@@ -223,3 +231,7 @@ class SalesReportView(tk.Frame):
     def on_back_click(self):
         """Al hacer clic en 'Volver al Menú', se llama al controlador para regresar a la vista principal."""
         self.controller.event_back()
+    
+    def on_clear_db_click(self):
+        """Al hacer clic en 'Limpiar DB', se llama al método correspondiente en el controlador."""
+        self.controller.event_clear_database()

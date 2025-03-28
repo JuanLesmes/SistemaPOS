@@ -15,36 +15,33 @@ class SalesView(tk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        
-        # Colores personalizados
-        fondo = "#9db7b1"
-        barra_arriba = "#10a2a7"
-        boton_volver = "#b57426"
-        
-        self.configure(width=800, height=600, bg=fondo)
+        self.configure(width=800, height=600)
         self.pack(fill="both", expand=True)
         
-        self.create_widgets(fondo, barra_arriba, boton_volver)
+        self.create_widgets()
     
-    def create_widgets(self, fondo, barra_arriba, boton_volver):
-        # Colores secundarios (no se modifican)
+    def create_widgets(self):
+        # Paleta de colores
+        turquesa = "#00BFBF"
+        naranja = "#FFA500"
+        gris_claro = "#F0F0F0"
         blanco = "#FFFFFF"
         negro = "#000000"
         verde = "#28A745"
         rojo = "#FF0000"
         azul = "#0000FF"
         gris_texto = "#808080"
-        
+
         # 1. Cabecera
-        header_frame = tk.Frame(self, bg=barra_arriba, height=60)
+        header_frame = tk.Frame(self, bg=turquesa, height=60)
         header_frame.pack(side="top", fill="x")
         header_frame.pack_propagate(False)
 
         title_label = tk.Label(
             header_frame,
             text="Venta de Productos",
-            fg="#000000",
-            bg=barra_arriba,
+            fg=blanco,
+            bg=turquesa,
             font=("Sans-serif", 20, "bold")
         )
         title_label.pack(side="left", padx=20)
@@ -52,8 +49,8 @@ class SalesView(tk.Frame):
         volver_button = tk.Button(
             header_frame,
             text="Volver al Menú",
-            bg=boton_volver,  # Botón en color café
-            fg= "#113949",
+            bg=naranja,
+            fg=negro,
             font=("Sans-serif", 14, "bold"),
             width=12,
             height=1,
@@ -65,11 +62,11 @@ class SalesView(tk.Frame):
         volver_button.pack(side="right", padx=20)
 
         # 2. Sección inferior: métodos de pago
-        payment_frame = tk.Frame(self, bg=fondo, height=60)
+        payment_frame = tk.Frame(self, bg=gris_claro, height=60)
         payment_frame.pack(side="bottom", fill="x")
         payment_frame.pack_propagate(False)
 
-        payment_container = tk.Frame(payment_frame, bg=fondo)
+        payment_container = tk.Frame(payment_frame, bg=gris_claro)
         payment_container.place(relx=0.5, rely=0.5, anchor="center")
 
         efectivo_button = tk.Button(
@@ -118,7 +115,7 @@ class SalesView(tk.Frame):
         transferencia_button.pack(side="left", padx=10)
 
         # 3. Cuerpo principal
-        main_frame = tk.Frame(self, bg=fondo)
+        main_frame = tk.Frame(self, bg=gris_claro)
         main_frame.pack(side="top", fill="both", expand=True)
 
         # Tabla (a la izquierda)
@@ -134,27 +131,27 @@ class SalesView(tk.Frame):
 
         style = ttk.Style()
         style.configure("Treeview", background=blanco, foreground=negro, rowheight=25, fieldbackground=blanco)
-        style.map('Treeview', background=[('selected', fondo)])
+        style.map('Treeview', background=[('selected', gris_claro)])
 
         self.tree.pack(fill="both", expand=True)
         self.tree.insert("", "end", values=("", "Tabla sin contenido", "", ""), tags=("placeholder",))
         self.tree.tag_configure("placeholder", foreground=gris_texto, anchor="center")
 
         # Barra lateral (a la derecha)
-        sidebar = tk.Frame(main_frame, bg=fondo)
+        sidebar = tk.Frame(main_frame, bg=gris_claro)
         sidebar.pack(side="right", fill="y", padx=20, pady=20)
 
         # --- Bloque para Agregar Producto en la misma pestaña ---
-        input_frame = tk.Frame(sidebar, bg=fondo)
+        input_frame = tk.Frame(sidebar, bg=gris_claro)
         input_frame.pack(pady=10, anchor="w")
 
         # Etiqueta y Entry para el Código del Producto
-        tk.Label(input_frame, text="Código:", bg=fondo, font=("Sans-serif", 12)).grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(input_frame, text="Código:", bg=gris_claro, font=("Sans-serif", 12)).grid(row=0, column=0, sticky="w", padx=5, pady=2)
         self.product_code_entry = tk.Entry(input_frame, width=20)
         self.product_code_entry.grid(row=0, column=1, padx=5, pady=2)
 
         # Etiqueta y Entry para la Cantidad
-        tk.Label(input_frame, text="Cantidad:", bg=fondo, font=("Sans-serif", 12)).grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(input_frame, text="Cantidad:", bg=gris_claro, font=("Sans-serif", 12)).grid(row=1, column=0, sticky="w", padx=5, pady=2)
         self.product_qty_entry = tk.Entry(input_frame, width=10)
         self.product_qty_entry.grid(row=1, column=1, padx=5, pady=2)
 
@@ -162,7 +159,7 @@ class SalesView(tk.Frame):
         add_button = tk.Button(
             sidebar,
             text="Agregar Producto",
-            bg=verde,  # Se mantiene el color original
+            bg=verde,
             fg=blanco,
             font=("Sans-serif", 14, "bold"),
             width=15,
@@ -178,7 +175,7 @@ class SalesView(tk.Frame):
         delete_button = tk.Button(
             sidebar,
             text="Eliminar Producto",
-            bg=rojo,  # Se mantiene el color original
+            bg=rojo,
             fg=blanco,
             font=("Sans-serif", 14, "bold"),
             width=15,
@@ -190,14 +187,14 @@ class SalesView(tk.Frame):
         )
         delete_button.pack(pady=10)
 
-        summary_frame = tk.Frame(sidebar, bg=fondo)
+        summary_frame = tk.Frame(sidebar, bg=gris_claro)
         summary_frame.pack(pady=20, anchor="w")
 
         # Etiqueta del total (se formatea el número usando format_price)
         self.total_label = tk.Label(
             summary_frame,
             text="Total Venta: $ 0",
-            bg=fondo,
+            bg=gris_claro,
             fg=negro,
             font=("Sans-serif", 16, "bold")
         )
@@ -207,7 +204,7 @@ class SalesView(tk.Frame):
         recibe_label = tk.Label(
             summary_frame,
             text="Recibe:",
-            bg=fondo,
+            bg=gris_claro,
             fg=negro,
             font=("Sans-serif", 14)
         )
@@ -251,10 +248,8 @@ class SalesView(tk.Frame):
         """
         self.total_label.config(text=f"Total Venta: $ {total_str}")
 
-    def clear_received_amount(self):
-        """Limpia el campo de monto recibido."""
-        self.recibe_entry.delete(0, tk.END)
-
     def get_received_amount(self):
-        """Obtiene el valor ingresado en el campo 'Recibe'."""
-        return self.recibe_entry.get().strip()
+        """
+        Retorna el texto que está en el Entry de 'Recibe'.
+        """
+        return self.recibe_entry.get()

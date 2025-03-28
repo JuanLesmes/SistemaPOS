@@ -18,7 +18,7 @@ class AdminView(tk.Frame):
         self.controller = controller
         
         # Ajustes principales de la ventana
-        self.config(width=800, height=600, bg="#9db7b1")  # Fondo general actualizado
+        self.config(width=800, height=600)
         self.pack_propagate(False)
         self.pack(fill="both", expand=True)
         
@@ -29,9 +29,9 @@ class AdminView(tk.Frame):
         self.create_widgets()
 
     def create_widgets(self):
-        self.color_turquesa = "#00BFBF"  # Color original (no se usa en cabecera)
-        self.color_naranja  = "#FFA500"   # Color original, se usaba para el botón Volver al Menú
-        self.color_gris     = "#F0F0F0"   # Color original, se reemplaza en fondo por #9db7b1 donde corresponde
+        self.color_turquesa = "#00BFBF"
+        self.color_naranja  = "#FFA500"
+        self.color_gris     = "#F0F0F0"
         self.color_blanco   = "#FFFFFF"
         self.color_azul     = "#0000FF"
         self.color_verde    = "#28A745"
@@ -47,15 +47,15 @@ class AdminView(tk.Frame):
         # Cabecera
         # ----------------------------------------------------------------
         header_height = 60
-        header_frame = tk.Frame(self, bg="#10a2a7", height=header_height)  # Barra superior actualizada
+        header_frame = tk.Frame(self, bg=self.color_turquesa, height=header_height)
         header_frame.pack(side="top", fill="x")
         header_frame.pack_propagate(False)
         
         title_label = tk.Label(
             header_frame,
             text="Control de Inventario",
-            bg="#10a2a7",  # Se utiliza el nuevo color para la barra superior
-            fg="#000000",
+            bg=self.color_turquesa,
+            fg="#FFFFFF",
             font=self.font_header
         )
         title_label.pack(side="left", padx=20)
@@ -63,8 +63,8 @@ class AdminView(tk.Frame):
         back_button = tk.Button(
             header_frame,
             text="Volver al Menú",
-            bg="#b57426",
-            fg="#113949",
+            bg=self.color_naranja,
+            fg="#000000",
             font=self.font_button,
             bd=0,
             cursor="hand2",
@@ -76,18 +76,17 @@ class AdminView(tk.Frame):
         # ----------------------------------------------------------------
         # Cuerpo Principal (sidebar + tabla)
         # ----------------------------------------------------------------
-        # Se actualiza el fondo general a #9db7b1 en lugar de gris
-        main_frame = tk.Frame(self, bg="#9db7b1")
+        main_frame = tk.Frame(self, bg=self.color_gris)
         main_frame.pack(side="top", fill="both", expand=True)
         
         # Sidebar
         sidebar_width = int(800 * 0.25)
-        sidebar_frame = tk.Frame(main_frame, bg="#9db7b1", width=sidebar_width)  # Fondo actualizado
+        sidebar_frame = tk.Frame(main_frame, bg=self.color_gris, width=sidebar_width)
         sidebar_frame.pack(side="left", fill="y", padx=20, pady=20)
         sidebar_frame.pack_propagate(False)
         
         # Etiqueta "Categoría:"
-        category_label = tk.Label(sidebar_frame, text="Categoría:", bg="#9db7b1", font=self.font_label)
+        category_label = tk.Label(sidebar_frame, text="Categoría:", bg=self.color_gris, font=self.font_label)
         category_label.pack(anchor="w", pady=5)
         
         # Combobox para categorías
@@ -147,7 +146,7 @@ class AdminView(tk.Frame):
         valuation_label_title = tk.Label(
             sidebar_frame,
             text="Valorización Inventario",
-            bg="#9db7b1",
+            bg=self.color_gris,
             font=self.font_label
         )
         valuation_label_title.pack(pady=(20, 0))
@@ -155,20 +154,20 @@ class AdminView(tk.Frame):
         self.valuation_amount_label = tk.Label(
             sidebar_frame,
             text="$0",
-            bg="#9db7b1",
+            bg=self.color_gris,
             font=("Sans-serif", 16, "bold")
         )
         self.valuation_amount_label.pack(pady=5)
         
         # Contenido: Tabla
-        content_frame = tk.Frame(main_frame, bg="#9db7b1")
+        content_frame = tk.Frame(main_frame, bg=self.color_blanco)
         content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
         
         products_label = tk.Label(
             content_frame,
             text="Productos en Inventario",
+            bg=self.color_blanco,
             fg="#000000",
-            bg="#9db7b1",
             font=("Sans-serif", 16, "bold"),
             anchor="w"
         )
@@ -217,8 +216,8 @@ class AdminView(tk.Frame):
         
         style.configure(
             "Inventory.Treeview.Heading",
-            background="#10a2a7",
-            foreground="#000000",
+            background="#00BFBF",
+            foreground="#FFFFFF",
             font=("Sans-serif", 14, "bold")
         )
         style.configure(
