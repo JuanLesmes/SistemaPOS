@@ -218,7 +218,39 @@ class DBConnection:
             if product:
                 sold_products.append(SoldProduct(receipt_id, product, row['quantity']))
         return sold_products
+    
+    def search_products(self, normalized_term):
+        try:
+            search_pattern = f"%{normalized_term}%"
 
+            query = """
+                SELECT p.code, p.name, p.cost, p.price, p.stock, 
+                    c.category_name, p.description
+                FROM products p
+                JOIN categories c ON p.category = c.idcategory
+                WHERE 
+                    LOWER(p.name) LIKE %s OR
+                    LOWER(p.description) LIKE %s
+                ORDER BY 
+                    CASE 
+                        WHEN LOWER(p.name) LIKE %s THEN 1 
+                        ELSE 2 
+                    END
+            """
+            
+            self.cursor.execute(query, (
+                search_pattern, 
+                search_pattern,
+                search_pattern  # Para el ORDER BY
+            ))
+            
+            return [Product(*row) for row in self.cursor.fetchall()]
+            
+        except Exception as e:
+            print(f"Error en búsqueda: {str(e)}")
+            return []
+        
+    
     # LIMPIEZA
     def clear_database(self):
         try:

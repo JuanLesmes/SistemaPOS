@@ -59,6 +59,7 @@ class ProductManagementView(tk.Frame):
         body_frame.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
 
         # Fila 1: Código y Nombre
+        
         lbl_code = tk.Label(body_frame, text="Código", bg=fondo, font=font_label)
         lbl_code.place(relx=0.02, rely=0.05)
         self.entry_code = tk.Entry(body_frame, font=font_entry, width=25)  # Aumentado
@@ -110,21 +111,38 @@ class ProductManagementView(tk.Frame):
         button_frame = tk.Frame(body_frame, bg=fondo)
         button_frame.place(relx=0.75, rely=0.1, relwidth=0.2, relheight=0.8)
 
-        # Botón "Buscar Por Scan"
-        btn_search_scan = tk.Button(
+        # --- campo de búsqueda ---
+        lbl_search = tk.Label(
             button_frame,
-            text="Buscar Por Scan",
+            text="Buscar (Código/Nombre):",
+            bg=fondo,
+            font=("Sans-serif", 10, "bold")
+        )
+        lbl_search.pack(pady=(0, 5), fill="x")
+
+        self.entry_search = tk.Entry(
+            button_frame,
+            font=font_entry,
+            width=20
+        )
+        self.entry_search.pack(pady=(0, 15), fill="x")
+
+        # --- Botones debajo del campo de búsqueda ---
+        btn_search = tk.Button(
+            button_frame,
+            text="Buscar",
             bg=azul, fg="white",
             font=font_button,
             command=self.controller.event_search_scan
         )
-        btn_search_scan.pack(fill="x", pady=10)
+        btn_search.pack(fill="x", pady=10)
 
         # Botón "Agregar Producto"
         btn_add_product = tk.Button(
             button_frame,
             text="Agregar Producto",
-            bg=verde, fg="white",
+            bg=verde,
+            fg="white",
             font=font_button,
             command=self.controller.event_add_product
         )
@@ -225,8 +243,15 @@ class ProductManagementView(tk.Frame):
         self.set_cost("")
         self.set_price("")
         self.set_description("")
+        self.clear_search()
         if self.cmb_category.cget("values"):
             self.cmb_category.current(0)
+
+    def get_search_term(self):
+        return self.entry_search.get().strip()
+
+    def clear_search(self):
+        self.entry_search.delete(0, "end")
 
     # Métodos para manejar la categoría en el combobox
     def get_selected_category(self):

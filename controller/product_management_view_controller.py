@@ -27,18 +27,38 @@ class ProductManagementViewController:
         self.main_controller.show_admin_view()
 
     def event_search_scan(self):
-        code = self.view.get_code()
-        if not code:
-            messagebox.showwarning("Alerta", "Ingrese un código para escanear/buscar.")
+        search_term = self.view.get_search_term()
+        
+        if not search_term:
+            messagebox.showwarning("Alerta", "Ingrese un criterio de búsqueda.")
             return
         
-        product = self.db.get_product(code)
-        if product:
-            self.fill_form_with_product(product)
+        # Normalizar el término para búsquedas parciales
+        normalized_term = search_term.strip().lower()  # <--- Añade esta línea
+        
+        # 1. Búsqueda exacta por código (case-sensitive)
+        exact_product = self.db.get_product(search_term)  # Usar el término original
+        if exact_product:
+            self.fill_form_with_product(exact_product)
+            return
+        
+        # 2. Búsqueda ampliada con término normalizado
+        matched_products = self.db.search_products(normalized_term)  # <--- Usar término normalizado
+            
+        if not matched_products:
+            messagebox.showinfo("Info", f"No se encontraron resultados para: '{search_term}'.")
+            self.view.clear_search()  # Limpiar búsqueda también aquí
+            return
+        
+        # Manejo de múltiples resultados
+        if len(matched_products) > 1:
+            selection = self.show_selection_dialog(matched_products)
+            if selection:
+                self.fill_form_with_product(selection)
         else:
-            messagebox.showinfo("Info", f"No se encontró el producto con código {code}.")
-
-
+            self.fill_form_with_product(matched_products[0])
+        
+        self.view.clear_search()  # Limpiar campo de búsqueda al final
     def event_add_stock(self):
         code = self.view.get_code()
         if not code:
@@ -138,6 +158,71 @@ class ProductManagementViewController:
 
         messagebox.showinfo("Éxito", f"Producto '{code}' modificado correctamente.")
 
+    def show_selection_dialog(self, products):
+        dialog = tk.Toplevel(self.parent)
+        dialog.title("Seleccionar Producto")
+        
+        # Frame principal
+        main_frame = tk.Frame(dialog, padx=20, pady=10)
+        main_frame.pack(fill="both", expand=True)
+        
+        # ListBox con scroll
+        scrollbar = tk.Scrollbar(main_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        listbox = tk.Listbox(
+            main_frame, 
+            width=60, 
+            height=8,
+            yscrollcommand=scrollbar.set,
+            font=("Sans-serif", 12)
+        )
+        
+        # Llenar con los productos
+        for p in products:
+            listbox.insert("end", str(p))
+        
+        listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=listbox.yview)
+        
+        # ===================================================================
+        # Función para manejar el doble clic (¡NUEVO!)
+        # ===================================================================
+        def on_double_click(event):
+            on_select()  # Llama a la misma función que el botón de selección
+        
+        listbox.bind("<Double-Button-1>", on_double_click)  # Asociar evento
+        # ===================================================================
+        
+        # Botón de selección
+        btn_frame = tk.Frame(dialog)
+        btn_frame.pack(pady=10)
+        
+        selected_product = None
+        
+        def on_select():
+            nonlocal selected_product
+            selection = listbox.curselection()
+            if selection:
+                selected_product = products[selection[0]]
+                dialog.destroy()
+        
+        btn_accept = tk.Button(
+            btn_frame,
+            text="Seleccionar",
+            command=on_select,
+            bg="#4CAF50",
+            fg="white",
+            font=("Sans-serif", 12, "bold"),
+            width=15)
+        btn_accept.pack(side="left", padx=10)
+        
+        # Hacer el diálogo modal
+        dialog.transient(self.parent)
+        dialog.grab_set()
+        self.parent.wait_window(dialog)
+        
+        return selected_product
 
     def event_delete_product(self):
         code = self.view.get_code()
@@ -194,6 +279,7 @@ class ProductManagementViewController:
     # Métodos internos
     # ----------------------------------------------
     def fill_form_with_product(self, product):
+        self.view.clear_search()
         self.view.set_code(product.code)
         self.view.set_name(product.name)
         self.view.set_stock(str(product.stock))
