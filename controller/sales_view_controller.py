@@ -7,11 +7,7 @@ import datetime
 
 class SalesViewController:
     def __init__(self, parent_frame, main_controller, db):
-        """
-        parent_frame: el Frame en el que se dibujará toda la vista de ventas.
-        main_controller: para navegar a otras vistas (show_login_view, etc.).
-        db: instancia de DBConnection para acceder a la BD.
-        """
+
         self.parent_frame = parent_frame
         self.main_controller = main_controller
         self.db = db

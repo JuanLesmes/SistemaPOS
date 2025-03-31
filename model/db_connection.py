@@ -20,7 +20,7 @@ class DBConnection:
     def __init__(self, 
                  db_name="inventario",
                  user="postgres",
-                 password="xxx",
+                 password="***REMOVED***",
                  host="localhost",
                  port="5432"):
         
@@ -167,24 +167,23 @@ class DBConnection:
     def delete_product(self, code):
         self.cursor.execute("DELETE FROM products WHERE code = %s", (code,))
 
-    # RECIBOS
     def add_receipt(self, receipt):
         self.cursor.execute("""
             INSERT INTO receipts (total, date, time, payment_method)
             VALUES (%s, %s, %s, %s)
             RETURNING idReceipt
         """, (receipt.total_sale, receipt.date, receipt.time, receipt.payment_method))
-        
+    
         receipt_id = self.cursor.fetchone()['idreceipt']
-        
+    
         for sp in receipt.sold_products:
             self.cursor.execute("""
                 INSERT INTO sold_products (idReceipt, codeP, quantity)
                 VALUES (%s, %s, %s)
             """, (receipt_id, sp.product.code, sp.quantity))
             self.update_stock(sp.product.code, -sp.quantity)
-        
-        return receipt_id
+    
+        return receipt_id  # Añadir este return
 
     def get_receipts_in_range(self, start_date, end_date):
         self.cursor.execute("""

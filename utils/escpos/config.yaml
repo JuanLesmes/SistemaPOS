@@ -1,0 +1,7 @@
+printer:
+  type: Usb  # Tipo de impresora (debe coincidir con la clase en escpos.printer)
+  vendor_id: 0x0483    # Valores de tu impresora
+  product_id: 0x070b   # 
+  interface: 0         #
+  in_ep: 0x81          #
+  out_ep: 0x02         #
