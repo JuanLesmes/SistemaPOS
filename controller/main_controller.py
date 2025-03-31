@@ -14,7 +14,7 @@ class MainController:
             self.db = DBConnection(
                 db_name="inventario",
                 user="postgres",
-                password="***REMOVED***",
+                password="x",
                 host="localhost",
                 port="5432"
             )

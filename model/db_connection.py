@@ -20,7 +20,7 @@ class DBConnection:
     def __init__(self, 
                  db_name="inventario",
                  user="postgres",
-                 password="***REMOVED***",
+                 password="x",
                  host="localhost",
                  port="5432"):
         

@@ -38,17 +38,6 @@ class ProductManagementViewController:
         else:
             messagebox.showinfo("Info", f"No se encontró el producto con código {code}.")
 
-    def event_search_manual(self):
-        code = self.view.get_code()
-        if not code:
-            messagebox.showwarning("Alerta", "Ingrese un código para buscar manualmente.")
-            return
-
-        product = self.db.get_product(code)
-        if product:
-            self.fill_form_with_product(product)
-        else:
-            messagebox.showinfo("Info", f"No se encontró el producto con código {code}.")
 
     def event_add_stock(self):
         code = self.view.get_code()
@@ -185,8 +174,11 @@ class ProductManagementViewController:
             messagebox.showwarning("Advertencia", "Seleccione una categoría válida para eliminar.")
             return
         
-        confirm = messagebox.askyesno("Confirmar eliminación", 
-                                      f"¿Está seguro de eliminar la categoría '{selected_cat}'?")
+        confirm = messagebox.askyesno(
+        "Confirmar eliminación permanente",
+        f"¿Está seguro de eliminar definitivamente la categoría '{selected_cat}'?\n\n"
+        "¡Esta acción es irreversible!\n"
+        "Todos los eventos asociados a esta categoría quedarán sin clasificación.")
         if confirm:
             # Se asume que existe el método delete_category en la BD
             result = self.db.delete_category(selected_cat)
