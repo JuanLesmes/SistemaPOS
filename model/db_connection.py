@@ -265,9 +265,8 @@ class DBConnection:
         self.cursor.close()
         self.conn.close()
 
-    # MÉTODOS ADICIONALES (se mantienen similares)
     def get_categories(self):
-        self.cursor.execute("SELECT category_name FROM categories")
+        self.cursor.execute("SELECT category_name FROM categories ORDER BY category_name ASC")
         return [row['category_name'] for row in self.cursor.fetchall()]
 
     def add_category(self, category_name):

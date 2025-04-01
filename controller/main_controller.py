@@ -7,7 +7,7 @@ class MainController:
     def __init__(self, root):
         self.root = root
         self.root.title("InventoryManagement")
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)  # Manejar cierre
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         try:
             # Configuración de conexión actualizada

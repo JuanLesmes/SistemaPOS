@@ -265,12 +265,12 @@ class AdminView(tk.Frame):
     def set_categories(self, categories):
         """
         Actualiza la lista de categorías en el combobox. 
-        categories es una lista de strings.
+        categories es una lista de strings ordenada desde la BD.
         """
-        # Ponemos "Todas" (o "All") al inicio
-        combo_values = ["Todas"] + categories
+        # Añadir "Todas" al inicio y asegurar orden
+        combo_values = ["Todas"] + sorted(categories)  # Ordenamos por si acaso
         self.category_combobox.config(values=combo_values)
-        self.category_combobox.current(0)
+        self.category_combobox.current(0)  # Seleccionar "Todas" por defecto
     
     def get_selected_category(self):
         """

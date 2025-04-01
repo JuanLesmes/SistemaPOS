@@ -225,9 +225,15 @@ class ProductManagementView(tk.Frame):
         return self.cmb_category.get().strip()
 
     def set_categories(self, categories):
-        self.cmb_category.config(values=categories)
-        if categories:
-            self.cmb_category.current(0)
+        """
+        Actualiza la lista de categorías en el combobox.
+        categories ya viene ordenada desde la BD, pero reforzamos el orden.
+        """
+        # Ordenar y actualizar
+        sorted_categories = sorted(categories)  # Orden alfabético
+        self.cmb_category.config(values=sorted_categories)
+        if sorted_categories:
+            self.cmb_category.current(0)  # Seleccionar primera categoría
 
     def get_description(self):
         return self.entry_description.get().strip()

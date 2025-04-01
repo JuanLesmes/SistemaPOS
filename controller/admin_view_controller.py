@@ -112,3 +112,8 @@ class AdminViewController:
         o a product_management_view.
         """
         self.main_controller.show_product_management_view()
+
+
+    def refresh_categories(self):
+        updated_cats = self.db.get_categories()
+        self.view.set_categories(["Todas"] + updated_cats) 

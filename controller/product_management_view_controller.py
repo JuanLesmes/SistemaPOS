@@ -185,14 +185,10 @@ class ProductManagementViewController:
         listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=listbox.yview)
         
-        # ===================================================================
-        # Función para manejar el doble clic (¡NUEVO!)
-        # ===================================================================
         def on_double_click(event):
-            on_select()  # Llama a la misma función que el botón de selección
+            on_select() 
         
-        listbox.bind("<Double-Button-1>", on_double_click)  # Asociar evento
-        # ===================================================================
+        listbox.bind("<Double-Button-1>", on_double_click) 
         
         # Botón de selección
         btn_frame = tk.Frame(dialog)
@@ -241,7 +237,7 @@ class ProductManagementViewController:
         )
         if confirm:
             # Eliminar registros en sold_products asociados al producto
-            self.db.cursor.execute("DELETE FROM sold_products WHERE codeP = ?", (code,))
+            self.db.cursor.execute("DELETE FROM sold_products WHERE codeP = %s", (code,))
             self.db.conn.commit()
             # Ahora, eliminar el producto
             self.db.delete_product(code)
@@ -250,31 +246,26 @@ class ProductManagementViewController:
 
 
     def event_delete_category(self):
-        """
-        Funcionalidad para eliminar la categoría seleccionada.
-        Se obtiene la categoría del combobox y se elimina si no es "Todas".
-        """
         selected_cat = self.view.get_selected_category()
         if selected_cat == "Todas" or not selected_cat:
             messagebox.showwarning("Advertencia", "Seleccione una categoría válida para eliminar.")
             return
         
         confirm = messagebox.askyesno(
-        "Confirmar eliminación permanente",
-        f"¿Está seguro de eliminar definitivamente la categoría '{selected_cat}'?\n\n"
-        "¡Esta acción es irreversible!\n"
-        "Todos los eventos asociados a esta categoría quedarán sin clasificación.")
+            "Confirmar eliminación permanente",
+            f"¿Está seguro de eliminar definitivamente la categoría '{selected_cat}'?\n\n"
+            "¡Esta acción es irreversible!\n"
+            "Todos los eventos asociados a esta categoría quedarán sin clasificación.")
         if confirm:
-            # Se asume que existe el método delete_category en la BD
             result = self.db.delete_category(selected_cat)
             if result:
                 messagebox.showinfo("Categoría eliminada", f"La categoría '{selected_cat}' ha sido eliminada.")
+                updated_cats = self.db.get_categories()
+                # Actualiza ambas vistas
+                self.view.set_categories(updated_cats)
+                self.main_controller.admin_view_controller.refresh_categories()  # <-- Nueva línea
             else:
                 messagebox.showerror("Error", f"No se pudo eliminar la categoría '{selected_cat}'.")
-            # Actualizamos la lista de categorías en la vista
-            updated_cats = self.db.get_categories()
-            self.view.set_categories(updated_cats)
-
     # ----------------------------------------------
     # Métodos internos
     # ----------------------------------------------
