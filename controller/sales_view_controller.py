@@ -7,20 +7,23 @@ import datetime
 
 class SalesViewController:
     def __init__(self, parent_frame, main_controller, db):
-
         self.parent_frame = parent_frame
         self.main_controller = main_controller
         self.db = db
+        self.buffer_codigo = ""  # Buffer para el código de barras
         
-        # Importa la vista aquí para evitar import circular
+        # 1° Crear la vista PRIMERO
         from view.sales_view import SalesView
-        # Creamos la vista pasándole el frame y "self" (este controller)
-        self.view = SalesView(self.parent_frame, self)
-
-        # Lista interna de productos vendidos
-        self.sold_products = []
+        self.view = SalesView(self.parent_frame, self)  # ¡Ahora existe!
         
+        # 2° Configurar bindings DESPUÉS de crear la vista
+        self.view.focus_set()  # Forzar foco para capturar eventos
+        self.view.bind("<KeyRelease>", self.handle_barcode_input)  # Captura global
+        self.sold_products = []
         self.initialize()
+        
+        self.view.recibe_entry.bind("<FocusIn>", self._pause_barcode_reader)
+        self.view.recibe_entry.bind("<FocusOut>", self._resume_barcode_reader)
 
     def initialize(self):
         """Reinicia la lista de venta y refresca la tabla y total."""
@@ -35,113 +38,122 @@ class SalesViewController:
         """Botón 'Volver al Menú'."""
         self.main_controller.show_login_view()
 
-    def event_add_product(self):
-        """Botón 'Agregar Producto' que toma los datos de los Entry de la vista."""
-        # Obtiene los datos de los campos de la vista
-        code = self.view.product_code_entry.get().strip()
-        qty_str = self.view.product_qty_entry.get().strip()
-        
-        if code == "" or qty_str == "":
-            messagebox.showwarning("Error", "Debes ingresar el código y la cantidad.")
-            return
+    def _pause_barcode_reader(self, event):
+        """Pausa la lectura de códigos de barras cuando el campo Recibe tiene foco"""
+        self.view.unbind("<KeyRelease>")
 
-        product = self.db.get_product(code)
-        if product is None:
-            messagebox.showwarning("Error", "Producto no encontrado.")
-            return
+    def _resume_barcode_reader(self, event):
+        """Reanuda la lectura cuando el campo Recibe pierde el foco"""
+        self.view.bind("<KeyRelease>", self.handle_barcode_input)
+        self.view.focus_set()
 
-        try:
-            qty = int(qty_str)
-            if qty <= 0:
-                messagebox.showwarning("Error", "La cantidad debe ser mayor a 0.")
+    def handle_barcode_input(self, event):
+        if self.view.recibe_entry.focus_get() == self.view.recibe_entry:
+            return
+        if event.keysym == "Return":
+            code = self.buffer_codigo.strip()
+            self.buffer_codigo = ""  # Reiniciar buffer
+            
+            if not code:
                 return
-        except ValueError:
-            messagebox.showerror("Error", "La cantidad debe ser un número entero.")
-            return
+                
+            product = self.db.get_product(code)
+            if product and product.stock > 0:
+                self.add_product_to_sale(product, 1)
+            else:
+                messagebox.showwarning("Error", "Producto no encontrado o sin stock")
+        else:
+            # Asegurar que solo se capturan caracteres válidos (dígitos)
+            if event.char.isdigit():
+                self.buffer_codigo += event.char
 
-        if qty > product.stock:
-            messagebox.showwarning("Error", f"No hay suficiente stock. Disponible: {product.stock}")
-            return
-
-        # Verifica si el producto ya está en la lista de sold_products
-        for sp in self.sold_products:
-            if sp.get_code() == product.code:
-                new_qty = sp.quantity + qty
-                if new_qty > product.stock:
-                    messagebox.showwarning("Error", f"No hay suficiente stock. Disponible: {product.stock}")
-                    return
-                sp.quantity = new_qty
-                sp.calculate_total_partial()
-                self.refresh_sales_table()
-                # Limpia los campos de entrada
-                self.view.product_code_entry.delete(0, tk.END)
-                self.view.product_qty_entry.delete(0, tk.END)
-                return
-
-        # Si es un producto nuevo en la venta
-        sp = SoldProduct(0, product, qty)
-        self.sold_products.append(sp)
+    def add_product_to_sale(self, product, quantity=1):
+        """
+        Agrega el producto como un nuevo ítem INDEPENDIENTE en la lista,
+        incluso si ya existe uno igual.
+        """
+        # Crear nuevo ítem siempre (sin verificar duplicados)
+        new_sp = SoldProduct(0, product, quantity)
+        self.sold_products.append(new_sp)
         self.refresh_sales_table()
 
-        # Limpia los campos de entrada después de agregar
-        self.view.product_code_entry.delete(0, tk.END)
-        self.view.product_qty_entry.delete(0, tk.END)
-
     def event_remove_product(self):
-        """Botón 'Eliminar Producto'."""
-        code = simpledialog.askstring("Eliminar Producto", "Ingrese código del producto a eliminar:")
-        if code is None or code.strip() == "":
+        """Elimina EXACTAMENTE el ítem seleccionado en la tabla"""
+        if not self.sold_products:
+            messagebox.showwarning("Error", "No hay productos en la venta")
             return
 
-        removed = False
-        for i, sp in enumerate(self.sold_products):
-            if sp.get_code() == code.strip():
-                self.sold_products.pop(i)
-                removed = True
-                break
+        selected_item = self.view.tree.selection()
+        
+        if not selected_item:
+            messagebox.showwarning("Error", "Seleccione un producto de la tabla")
+            return
 
-        if removed:
+        # Obtener el índice del ítem seleccionado en el Treeview
+        selected_index = self.view.tree.index(selected_item[0])
+        
+        # Eliminar por posición en la lista (no por código)
+        if 0 <= selected_index < len(self.sold_products):
+            del self.sold_products[selected_index]
             self.refresh_sales_table()
+            messagebox.showinfo("Éxito", "Ítem eliminado")
         else:
-            messagebox.showwarning("Error", "Producto no se encuentra en la lista de venta.")
-
+            messagebox.showwarning("Error", "Ítem no encontrado")
+            
     def event_cash_payment(self):
-        """Botón 'Pago con Efectivo'."""
-        total_sale = float(self.calculate_total())
-        if total_sale == 0.0:
-            messagebox.showerror("Error", "No hay productos en la venta.")
-            return
-        
-        val_str = self.view.get_received_amount().strip()
-        if val_str == "":
-            messagebox.showerror("Error", "Por favor ingrese la cantidad recibida.")
-            return
-        
         try:
-            received = float(val_str)
+            # 1. Validar que haya productos en la venta
+            total_sale = float(self.calculate_total())
+            if total_sale <= 0.0:
+                raise ValueError("No hay productos en la venta")
+
+            # 2. Obtener y validar el monto recibido
+            received_str = self.view.get_received_amount().strip()
+            if not received_str:
+                raise ValueError("Ingrese la cantidad recibida")
+            
+            received = float(received_str)
             if received < total_sale:
-                messagebox.showerror("Error", "El valor recibido no cubre el total de la venta.")
-                return
+                raise ValueError(f"Monto insuficiente. Faltan ${total_sale - received:.2f}")
+
+            # 3. Calcular vuelto y generar recibo
             change_due = received - total_sale
-            self.generate_receipt("Cash", total_sale, change_due)
-        except ValueError:
-            messagebox.showerror("Error", "Valor recibido inválido.")
+            self.generate_receipt("Efectivo", total_sale, change_due)
+            
+            # 4. Limpiar campos después de la venta
+            self.view.clear_received_amount()
+
+
+        except ValueError as e:
+            messagebox.showerror("Error en Pago", str(e))
+        except Exception as e:
+            messagebox.showerror("Error Crítico", f"Ocurrió un error inesperado: {str(e)}")
 
     def event_card_payment(self):
-        """Botón 'Pago con Tarjeta'."""
-        total_sale = float(self.calculate_total())
-        if total_sale == 0.0:
-            messagebox.showerror("Error", "No hay productos en la venta.")
-            return
-        self.generate_receipt("Card", total_sale, 0.0)
+        try:
+            total_sale = float(self.calculate_total())
+            if total_sale <= 0.0:
+                raise ValueError("No hay productos en la venta")
+                
+            self.generate_receipt("Tarjeta", total_sale, 0.0)
+            
+        except ValueError as e:
+            messagebox.showerror("Error en Pago", str(e))
+        except Exception as e:
+            messagebox.showerror("Error Crítico", f"Ocurrió un error inesperado: {str(e)}")
 
     def event_transfer_payment(self):
-        """Botón 'Transferencia'."""
-        total_sale = float(self.calculate_total())
-        if total_sale == 0.0:
-            messagebox.showerror("Error", "No hay productos en la venta.")
-            return
-        self.generate_receipt("Transfer", total_sale, 0.0)
+        try:
+            total_sale = float(self.calculate_total())
+            if total_sale <= 0.0:
+                raise ValueError("No hay productos en la venta")
+                
+            self.generate_receipt("Transferencia", total_sale, 0.0)
+            
+        except ValueError as e:
+            messagebox.showerror("Error en Pago", str(e))
+        except Exception as e:
+            messagebox.showerror("Error Crítico", f"Ocurrió un error inesperado: {str(e)}")
 
     # ----------------------------------------------------------------
     # Métodos de apoyo
@@ -162,7 +174,7 @@ class SalesViewController:
             date=now.date(),
             time=now.time(),
             payment_method=payment_method,
-            total_sale=total_sale
+            total_sale=total_sale   
         )
         receipt.sold_products = self.sold_products
         self.db.add_receipt(receipt)
@@ -172,3 +184,24 @@ class SalesViewController:
 
         # Limpia la venta actual
         self.initialize()
+
+    def process_payment(self):
+        """Procesa el pago y devuelve el foco al frame principal"""
+        try:
+            received_str = self.view.get_received_amount().strip()
+            if not received_str:
+                raise ValueError("Ingrese el monto recibido")
+            
+            total = float(self.calculate_total())
+            received = float(received_str)
+            
+            if received < total:
+                messagebox.showerror("Error", "Monto insuficiente")
+                return
+                
+            # Procesar pago exitoso
+            self.view.clear_received_amount()
+            self.view.focus_set()  # Foco de vuelta al frame
+            
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))

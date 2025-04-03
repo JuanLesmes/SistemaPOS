@@ -1,7 +1,6 @@
-# controller/main_controller.py
 import tkinter as tk
 from controller.voucher_view_controller import VoucherViewController
-from model.db_connection import DBConnection  # <-- para BD
+from model.db_connection import DBConnection
 
 class MainController:
     def __init__(self, root):
@@ -9,8 +8,8 @@ class MainController:
         self.root.title("InventoryManagement")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        # Configuración de la base de datos
         try:
-            # Configuración de conexión actualizada
             self.db = DBConnection(
                 db_name="inventario",
                 user="postgres",
@@ -19,106 +18,80 @@ class MainController:
                 port="5432"
             )
         except Exception as e:
-            tk.messagebox.showerror("Error de conexión", f"No se pudo conectar a la base de datos:\n{e}")
+            tk.messagebox.showerror("Error de conexión", str(e))
             self.root.destroy()
             return
 
-        from view.login_view import LoginView
-        from view.admin_view import AdminView
-        from view.product_management_view import ProductManagementView
-        from view.sales_report_view import SalesReportView
-        from view.voucher_view import VoucherView
+        # Inicializar vistas y controladores UNA VEZ
+        self._initialize_controllers()
+        self.show_login_view()
 
-        # LoginView
+    def _initialize_controllers(self):
+        """Inicializa todos los controladores y frames al inicio."""
+        from controller.admin_view_controller import AdminViewController
+        from controller.product_management_view_controller import ProductManagementViewController
+        from controller.sales_view_controller import SalesViewController
+        from controller.sales_report_view_controller import SalesReportViewController
+        from view.login_view import LoginView
+
+        # Frame de Login
         self.frame_login = tk.Frame(self.root)
         self.login_view = LoginView(self.frame_login, self)
 
-        # AdminView
+        # Frame de Administración
         self.frame_admin = tk.Frame(self.root)
-        from controller.admin_view_controller import AdminViewController
-        self.admin_view_controller = AdminViewController(self.frame_admin, self, self.db)
+        self.admin_controller = AdminViewController(self.frame_admin, self, self.db)
 
-        # ProductManagementView
+        # Frame de Productos
         self.frame_product_mgmt = tk.Frame(self.root)
-        from controller.product_management_view_controller import ProductManagementViewController
-        self.product_mgmt_controller = ProductManagementViewController(self.frame_product_mgmt, self, self.db)
+        self.product_controller = ProductManagementViewController(self.frame_product_mgmt, self, self.db)
 
-
-        # SalesView + Controller
+        # Frame de Ventas (reutilizado)
         self.frame_sales = tk.Frame(self.root)
-        from controller.sales_view_controller import SalesViewController
-        self.sales_view_controller = SalesViewController(self.frame_sales, self, self.db)
-        # NOTA: Esto internamente crea "sales_view_controller.view"
+        self.sales_controller = SalesViewController(self.frame_sales, self, self.db)
 
-        # SalesReportView
+        # Frame de Reportes
         self.frame_sales_report = tk.Frame(self.root)
-        from controller.sales_report_view_controller import SalesReportViewController
-        self.sales_report_controller = SalesReportViewController(self.frame_sales_report, self, self.db)
-        
-        # Mostramos la vista principal
-        self.show_login_view()
+        self.report_controller = SalesReportViewController(self.frame_sales_report, self, self.db)
 
     def on_close(self):
-        """Manejar el cierre de la aplicación"""
-        if hasattr(self, 'db'):
-            self.db.close_connection()
+        """Cierra la aplicación correctamente."""
+        self.db.close_connection()
         self.root.destroy()
 
+    # --------------------------
+    # Métodos para mostrar vistas
+    # --------------------------
     def show_login_view(self):
-        self.hide_all_frames()
-        self.frame_login.pack(fill="both", expand=True)
+        self._show_frame(self.frame_login)
 
     def show_admin_view(self):
-        self.hide_all_frames()
-        self.frame_admin.pack(fill="both", expand=True)
+        self._show_frame(self.frame_admin)
 
     def show_product_management_view(self):
-        self.hide_all_frames()
-        self.frame_product_mgmt.pack(fill="both", expand=True)
+        self._show_frame(self.frame_product_mgmt)
 
     def show_sales_view(self):
+        """Muestra el frame de ventas existente."""
         self.hide_all_frames()
-        self.frame_sales.pack(fill="both", expand=True)
-        # Aqui ya se está mostrando la vista con la lógica unida
+        self.frame_sales.pack(fill="both", expand=True)  # No crear uno nuevo
+        self.sales_controller.initialize()  # Reinicia el estado si es necesario
 
     def show_sales_report_view(self):
-        self.hide_all_frames()
-        self.frame_sales_report.pack(fill="both", expand=True)
-
-
+        self._show_frame(self.frame_sales_report)
 
     def show_voucher_view(self, receipt, change_due):
-        # Aquí es donde mostramos el Recibo SÓLO cuando lo necesitamos.
-        from controller.voucher_view_controller import VoucherViewController
-        self.voucher_controller = VoucherViewController(self.root, self)
-        print("Creando voucher_view_controller en el init de MainController")
+        """Muestra el voucher como ventana emergente (Toplevel)."""
+        # No afecta a los frames principales
+        VoucherViewController(self.root, self, receipt, change_due)
 
-
-        # Llenar la data
-        # (puedes crear la lista de productos, fecha/hora, etc.)
-        productos_list = []
-        for sp in receipt.sold_products:
-            productos_list.append((sp.quantity, sp.product.name, sp.total_partial))
-
-        fecha_str = receipt.date.strftime("%d/%m/%Y")
-        hora_str = receipt.time.strftime("%H:%M")
-
-        # Recibo ID con ceros a la izquierda
-        voucher_id = str(receipt.id).zfill(10)
-
-        self.voucher_controller.load_data(
-            receipt_id=voucher_id,
-            fecha_emision=fecha_str,
-            hora_emision=hora_str,
-            productos=productos_list,
-            total=receipt.total_sale,
-            vueltas=change_due
-        )
-
-    def load_data(self, receipt, change_due):
-        self.view.load_receipt_data(receipt, change_due)
-
+    def _show_frame(self, frame):
+        """Muestra un frame y oculta los demás."""
+        self.hide_all_frames()
+        frame.pack(fill="both", expand=True)
 
     def hide_all_frames(self):
+        """Oculta todos los frames principales."""
         for widget in self.root.winfo_children():
-            widget.pack_forget()
+            if isinstance(widget, tk.Frame):
+                widget.pack_forget()

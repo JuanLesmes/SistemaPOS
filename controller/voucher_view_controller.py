@@ -4,10 +4,20 @@ from utils.printer_manager import XPrinterManager
 logger = logging.getLogger(__name__)
 
 class VoucherViewController:
-    def __init__(self, main_controller):
+    def __init__(self, parent, main_controller, receipt, change_due):
+        self.parent = parent
         self.main_controller = main_controller
-        self.printer = XPrinterManager()
-        
+        self.receipt = receipt
+        self.change_due = change_due
+
+        # Crear la vista y pasarle los datos
+        from view.voucher_view import VoucherView
+        self.view = VoucherView(self.parent, self, receipt, change_due)  # self es el controlador
+
+    def event_go_back_to_sales(self):
+        if self.view.winfo_exists():
+            self.view.destroy()
+
     def print_receipt(self, receipt_data):
         try:
             formatted_data = self._format_receipt(receipt_data)

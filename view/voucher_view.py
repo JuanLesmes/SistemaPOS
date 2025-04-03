@@ -1,167 +1,183 @@
 import tkinter as tk
 from tkinter import ttk
-from utils.formatters import format_price  # Importamos la función para formatear precios
+from utils.formatters import format_price
 
 class VoucherView(tk.Toplevel):
-    """
-    Ventana emergente (Toplevel) que muestra el Recibo:
-      - Número de voucher
-      - Fecha de emisión (fecha/hora)
-      - Tabla de productos (Cantidad, Nombre, Total Parcial)
-      - Total, Vueltas
-      - Botón "Volver a Ventas"
-    """
-    def __init__(self, parent, controller):
-        """
-        parent: la ventana o frame padre (normalmente root o un frame).
-        controller: el objeto controlador que maneja la lógica (por ejemplo, un 
-                    método event_go_back_to_sales() para cerrar esta ventana y volver).
-        """
+    def __init__(self, parent, controller, receipt, change_due):
         super().__init__(parent)
-        self.title("Recibo de Venta")
         self.controller = controller
-
-        # Ajuste de tamaño, opcional
-        self.geometry("600x500")
-
-        # Creamos widgets
+        self.receipt = receipt
+        self.change_due = change_due
+        
+        # Configuración de la ventana
+        self.title("Recibo de Venta")
+        self.geometry("680x600")  # Aumentamos tamaño para mejor visualización
         self.create_widgets()
+        self.load_receipt_data_from_objects()
 
     def create_widgets(self):
-        # Paleta de colores (ajusta a tu gusto)
         gris_claro = "#E0E0E0"
         verde = "#28A745"
         negro = "#000000"
-        fuente_header = ("Sans-serif", 16, "bold")
+        fuente_titulo = ("Sans-serif", 14, "bold")
         fuente_normal = ("Sans-serif", 12)
 
         self.config(bg=gris_claro)
 
-        # ----------------------------------------------------------------------
-        # ENCABEZADO: Voucher n°, Fecha/Hora de emisión
-        # ----------------------------------------------------------------------
+        # --------------------------------------------
+        # Sección Superior: Información de la tienda
+        # --------------------------------------------
         header_frame = tk.Frame(self, bg=gris_claro)
-        header_frame.pack(side="top", fill="x", padx=10, pady=10)
+        header_frame.pack(side="top", fill="x", padx=15, pady=10)
 
-        # Voucher n°
-        self.voucher_num_label = tk.Label(
+        tk.Label(
             header_frame,
-            text="Voucher n°: 0000000000",
+            text="CIGARRERÍA ANTARES",
             bg=gris_claro,
             fg=negro,
-            font=("Sans-serif", 14, "bold")
-        )
-        self.voucher_num_label.pack(anchor="w")
+            font=("Sans-serif", 16, "bold")
+        ).pack(anchor="w")
 
-        # Fecha / Hora
-        self.fecha_hora_label = tk.Label(
+        tk.Label(
             header_frame,
-            text="Fecha de emisión: 00/00/0000  00:00",
+            text="NIT: 80881386-8 | Tel: 350-701-6084",
             bg=gris_claro,
             fg=negro,
             font=fuente_normal
-        )
-        self.fecha_hora_label.pack(anchor="w", pady=(5,0))
+        ).pack(anchor="w", pady=(5,0))
 
-        # Separador visual
-        sep = ttk.Separator(self, orient="horizontal")
-        sep.pack(fill="x", padx=10, pady=5)
+        # --------------------------------------------
+        # Datos del Recibo
+        # --------------------------------------------
+        data_frame = tk.Frame(self, bg=gris_claro)
+        data_frame.pack(side="top", fill="x", padx=15, pady=10)
 
-        # ----------------------------------------------------------------------
-        # TABLA de productos
-        # ----------------------------------------------------------------------
+        # Número de Recibo y Fecha
+        tk.Label(
+            data_frame,
+            text=f"Recibo N°: {str(self.receipt.id).zfill(10)}",
+            bg=gris_claro,
+            fg=negro,
+            font=fuente_titulo
+        ).grid(row=0, column=0, sticky="w")
+
+        tk.Label(
+            data_frame,
+            text=f"Fecha: {self.receipt.date.strftime('%d/%m/%Y')}",
+            bg=gris_claro,
+            fg=negro,
+            font=fuente_normal
+        ).grid(row=1, column=0, sticky="w", pady=(5,0))
+
+        tk.Label(
+            data_frame,
+            text=f"Hora: {self.receipt.time.strftime('%H:%M')}",
+            bg=gris_claro,
+            fg=negro,
+            font=fuente_normal
+        ).grid(row=2, column=0, sticky="w")
+
+        # --------------------------------------------
+        # Tabla de Productos
+        # --------------------------------------------
         table_frame = tk.Frame(self, bg=gris_claro)
-        table_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
+        table_frame.pack(side="top", fill="both", expand=True, padx=15, pady=10)
 
-        columns = ("cantidad", "nombre", "total_parcial")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
-        self.tree.heading("cantidad", text="Cantidad")
-        self.tree.heading("nombre", text="Nombre Producto")
-        self.tree.heading("total_parcial", text="Total Parcial")
-
+        columns = ("cantidad", "nombre", "precio_unitario", "total_parcial")
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=8)
+        
+        # Configurar columnas
+        self.tree.heading("cantidad", text="CANTIDAD", anchor="w")
+        self.tree.heading("nombre", text="PRODUCTO", anchor="w")
+        self.tree.heading("precio_unitario", text="PRECIO UNITARIO", anchor="e")
+        self.tree.heading("total_parcial", text="TOTAL PARCIAL", anchor="e")
+        
         self.tree.column("cantidad", width=80, anchor="center")
-        self.tree.column("nombre", width=220, anchor="w")
-        self.tree.column("total_parcial", width=120, anchor="e")
+        self.tree.column("nombre", width=250, anchor="w")
+        self.tree.column("precio_unitario", width=150, anchor="e")
+        self.tree.column("total_parcial", width=150, anchor="e")
 
         self.tree.pack(side="left", fill="both", expand=True)
 
-        # Scrollbar vertical
-        scrollbar_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscroll=scrollbar_y.set)
-        scrollbar_y.pack(side="right", fill="y")
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
 
-        # ----------------------------------------------------------------------
-        # Sección inferior: Total, Vueltas, Botón "Volver"
-        # ----------------------------------------------------------------------
-        bottom_frame = tk.Frame(self, bg=gris_claro)
-        bottom_frame.pack(side="bottom", fill="x", padx=10, pady=10)
+        # --------------------------------------------
+        # Totales y Método de Pago
+        # --------------------------------------------
+        totales_frame = tk.Frame(self, bg=gris_claro)
+        totales_frame.pack(side="top", fill="x", padx=15, pady=10)
 
-        # Separador
-        sep2 = ttk.Separator(bottom_frame, orient="horizontal")
-        sep2.pack(fill="x", pady=(0,10))
-
-        # Labels de total y vueltas
-        self.total_label = tk.Label(
-            bottom_frame,
-            text="Total: $0",
+        # Labels Dinámicas (se actualizarán con los datos)
+        self.lbl_total = tk.Label(
+            totales_frame,
+            text="TOTAL COMPRA: $0",
             bg=gris_claro,
             fg=negro,
-            font=("Sans-serif", 14, "bold")
+            font=fuente_titulo
         )
-        self.total_label.pack(anchor="w")
+        self.lbl_total.pack(anchor="e")
 
-        self.vueltas_label = tk.Label(
-            bottom_frame,
-            text="Vueltas: $0",
+        self.lbl_recibido = tk.Label(
+            totales_frame,
+            text="RECIBIDO: $0",
             bg=gris_claro,
             fg=negro,
             font=fuente_normal
         )
-        self.vueltas_label.pack(anchor="w", pady=(0,10))
+        self.lbl_recibido.pack(anchor="e")
 
-        # Botón "Volver a Ventas"
-        self.back_button = tk.Button(
-            bottom_frame,
+        self.lbl_vueltas = tk.Label(
+            totales_frame,
+            text="VUELTAS: $0",
+            bg=gris_claro,
+            fg=negro,
+            font=fuente_normal
+        )
+        self.lbl_vueltas.pack(anchor="e")
+
+        # --------------------------------------------
+        # Botón de Volver
+        # --------------------------------------------
+        btn_frame = tk.Frame(self, bg=gris_claro)
+        btn_frame.pack(side="bottom", fill="x", padx=15, pady=15)
+
+        tk.Button(
+            btn_frame,
             text="Volver a Ventas",
             bg=verde,
             fg="white",
             font=("Sans-serif", 12, "bold"),
-            width=15,
-            height=1,
-            bd=0,
-            cursor="hand2",
-            command=self.controller.event_go_back_to_sales  # Ajusta el nombre
-        )
-        self.back_button.pack(anchor="e")
+            width=20,
+            command=self.controller.event_go_back_to_sales
+        ).pack(side="right")
 
-    def load_receipt_data(self, receipt_id, fecha_emision, hora_emision, productos, total, vueltas):
-        """
-        Rellena la info del voucher:
-          - voucher_num_label
-          - fecha_hora_label
-          - tabla con productos (cantidad, nombre, total_parcial)
-          - total_label y vueltas_label
-        :param receipt_id: (str) Ej: "0000000001"
-        :param fecha_emision: (str) "11/11/2021"
-        :param hora_emision: (str) "19:20"
-        :param productos: lista de tuplas (cantidad, nombre, total_parcial)
-        :param total: float con el total
-        :param vueltas: float con las vueltas
-        """
-        # Voucher n°
-        self.voucher_num_label.config(text=f"Voucher n°: {receipt_id}")
-        # Fecha/hora
-        self.fecha_hora_label.config(text=f"Fecha de emisión: {fecha_emision}  {hora_emision}")
+    def load_receipt_data_from_objects(self):
+        """Carga los datos del recibo en la vista"""
+        productos = [
+            (
+                sp.quantity, 
+                sp.product.name, 
+                format_price(sp.product.price), 
+                format_price(sp.total_partial)
+            ) 
+            for sp in self.receipt.sold_products
+        ]
 
-        # Limpiar la tabla
+        # Calcular valores
+        total_compra = self.receipt.total_sale
+        recibido = total_compra + self.change_due  # Total + Vueltas = Recibido
+
+        # Actualizar labels
+        self.lbl_total.config(text=f"TOTAL COMPRA: {format_price(total_compra)}")
+        self.lbl_recibido.config(text=f"RECIBIDO: {format_price(recibido)}")
+        self.lbl_vueltas.config(text=f"VUELTAS: {format_price(self.change_due)}")
+
+        # Insertar datos en la tabla
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        # Insertar filas en la tabla, usando format_price para total parcial
-        for p in productos:
-            # p = (cantidad, nombre, total_parcial)
-            self.tree.insert("", "end", values=(p[0], p[1], f"${format_price(p[2], decimals=0)}"))
-
-        # Actualizamos total y vueltas, usando también format_price para tener el mismo formato
-        self.total_label.config(text=f"Total: ${format_price(total, decimals=0)}")
-        self.vueltas_label.config(text=f"Vueltas: ${format_price(vueltas, decimals=0)}")
+        for producto in productos:
+            self.tree.insert("", "end", values=producto)
