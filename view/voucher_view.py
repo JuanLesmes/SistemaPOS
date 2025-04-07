@@ -167,7 +167,7 @@ class VoucherView(tk.Toplevel):
         ]
 
         # Calcular valores
-        total_compra = self.receipt.total_sale
+        total_compra = self.receipt.total  # Total de la compra
         recibido = total_compra + self.change_due  # Total + Vueltas = Recibido
 
         # Actualizar labels

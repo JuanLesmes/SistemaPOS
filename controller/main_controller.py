@@ -1,5 +1,6 @@
 import tkinter as tk
 from controller.voucher_view_controller import VoucherViewController
+from controller.product_management_view_controller import ProductManagementViewController
 from model.db_connection import DBConnection
 
 class MainController:
@@ -41,10 +42,14 @@ class MainController:
         # Frame de Administración
         self.frame_admin = tk.Frame(self.root)
         self.admin_controller = AdminViewController(self.frame_admin, self, self.db)
-
+        
         # Frame de Productos
         self.frame_product_mgmt = tk.Frame(self.root)
-        self.product_controller = ProductManagementViewController(self.frame_product_mgmt, self, self.db)
+        self.product_mgmt_controller = ProductManagementViewController(
+            self.frame_product_mgmt, 
+            self, 
+            self.db
+        )
 
         # Frame de Ventas (reutilizado)
         self.frame_sales = tk.Frame(self.root)
@@ -69,16 +74,19 @@ class MainController:
         self._show_frame(self.frame_admin)
 
     def show_product_management_view(self):
-        self._show_frame(self.frame_product_mgmt)
+        self.hide_all_frames()
+        self.frame_product_mgmt.pack(fill="both", expand=True)
+        self.product_mgmt_controller.view.set_categories(self.db.get_categories())
 
     def show_sales_view(self):
         """Muestra el frame de ventas existente."""
         self.hide_all_frames()
-        self.frame_sales.pack(fill="both", expand=True)  # No crear uno nuevo
-        self.sales_controller.initialize()  # Reinicia el estado si es necesario
+        self.frame_sales.pack(fill="both", expand=True)
+        self.sales_controller.initialize()
+        self.sales_controller.activate_barcode_reader()
 
     def show_sales_report_view(self):
-        self._show_frame(self.frame_sales_report)
+        self._show_frame(self.frame_sales_report    )
 
     def show_voucher_view(self, receipt, change_due):
         """Muestra el voucher como ventana emergente (Toplevel)."""
@@ -95,3 +103,12 @@ class MainController:
         for widget in self.root.winfo_children():
             if isinstance(widget, tk.Frame):
                 widget.pack_forget()
+        
+    def get_current_voucher_controller(self):
+        return self.current_voucher_controller
+    
+    def refresh_all_categories(self):
+        updated_cats = self.db.get_categories()
+        self.admin_controller.view.set_categories(["Todas"] + updated_cats)  # <-- admin_controller
+        if hasattr(self, "product_mgmt_controller"):
+            self.product_mgmt_controller.view.set_categories(updated_cats)

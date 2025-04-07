@@ -208,18 +208,24 @@ class ProductManagementView(tk.Frame):
         self.entry_stock.insert(0, value)
 
     def get_cost(self):
-        return self.entry_cost.get().strip()
+        cost_str = self.entry_cost.get().strip()
+        cost_str = cost_str.replace(".", "").replace(",", ".")
+        return cost_str
 
     def set_cost(self, value):
+        formatted_cost = format_price(value, decimals=2)
         self.entry_cost.delete(0, "end")
-        self.entry_cost.insert(0, value)
+        self.entry_cost.insert(0, formatted_cost)
 
     def get_price(self):
-        return self.entry_price.get().strip()
+        price_str = self.entry_price.get().strip()
+        price_str = price_str.replace(".", "").replace(",", ".")
+        return price_str
 
     def set_price(self, value):
+        formatted_price = format_price(value, decimals=2)
         self.entry_price.delete(0, "end")
-        self.entry_price.insert(0, value)
+        self.entry_price.insert(0, formatted_price)
 
     def get_category(self):
         return self.cmb_category.get().strip()
@@ -227,13 +233,11 @@ class ProductManagementView(tk.Frame):
     def set_categories(self, categories):
         """
         Actualiza la lista de categorías en el combobox.
-        categories ya viene ordenada desde la BD, pero reforzamos el orden.
         """
-        # Ordenar y actualizar
-        sorted_categories = sorted(categories)  # Orden alfabético
+        sorted_categories = sorted(categories, key=lambda x: x.lower())
         self.cmb_category.config(values=sorted_categories)
         if sorted_categories:
-            self.cmb_category.current(0)  # Seleccionar primera categoría
+            self.cmb_category.current(0)
 
     def get_description(self):
         return self.entry_description.get().strip()

@@ -2,5 +2,3 @@
 class SalesRecord:
     def __init__(self):
         self.receipts = {}
-
-    # You could add methods to track receipts, etc.

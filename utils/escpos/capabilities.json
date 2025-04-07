@@ -1,0 +1,22 @@
+{
+    "printers": {
+        "default": {
+            "profile": "CustomUSBPrinter",
+            "vendor": "0x0483",
+            "product": "0x070b"
+        }
+    },
+    "profiles": {
+        "CustomUSBPrinter": {
+            "features": {
+                "text": true,
+                "image": true,
+                "barcode": true,
+                "qr_code": true
+            },
+            "codePages": {
+                "0": "CP437"
+            }
+        }
+    }
+}

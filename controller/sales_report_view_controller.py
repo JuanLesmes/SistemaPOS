@@ -63,28 +63,19 @@ class SalesReportViewController:
         return filtered
 
     def calculate_totals(self, receipts):
-        """Calcula el total recaudado y la suma según cada método de pago."""
         total = 0.0
         cash = 0.0
         card = 0.0
         transfer = 0.0
-        for r in receipts:
-            total += r.total_sale
-            if r.payment_method == "Cash":
-                cash += r.total_sale
-            elif r.payment_method == "Card":
-                card += r.total_sale
-            elif r.payment_method == "Transfer":
-                transfer += r.total_sale
-        return total, cash, card, transfer
-    
-    def event_clear_database(self):
-        """Confirma y borra todos los datos de la base de datos, incluyendo ventas."""
-        confirm = messagebox.askyesno(
-            "Confirmar eliminación",
-            "⚠️ Esto eliminará TODAS las ventas, productos y categorías. ¿Está seguro?"
-        )
 
-        if confirm:
-            self.db.clear_database()  # Llamamos al método corregido en DBConnection
-            messagebox.showinfo("Base de Datos", "Todos los datos han sido eliminados con éxito.")
+        for r in receipts:
+            total += r.total
+            # Usar las mismas cadenas que al generar el recibo
+            if r.payment_method == "Efectivo":  # <--- Antes era "Cash"
+                cash += r.total
+            elif r.payment_method == "Tarjeta":  # <--- Antes era "Card"
+                card += r.total
+            elif r.payment_method == "Transferencia":  # <--- Antes era "Transfer"
+                transfer += r.total
+
+        return total, cash, card, transfer

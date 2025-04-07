@@ -15,6 +15,7 @@ class ProductManagementViewController:
 
         from view.product_management_view import ProductManagementView
         self.view = ProductManagementView(self.parent, self)
+        self.view.pack(fill="both", expand=True)
 
         # Cargar categorías en el combo
         cats = self.db.get_categories()  # Devuelve lista de nombres
@@ -140,22 +141,30 @@ class ProductManagementViewController:
 
         name = self.view.get_name()
         stock_str = self.view.get_stock()
-        cost_str = self.view.get_cost()
+        cost_str = self.view.get_cost()  # Ej: "1.000" → "1000" o "1.500,25" → "1500.25"
         price_str = self.view.get_price()
         category = self.view.get_category()
         desc = self.view.get_description()
 
         try:
-            stock = int(stock_str) if stock_str else 0
-            cost = float(cost_str) if cost_str else 0.0
-            price = float(price_str) if price_str else 0.0
-        except ValueError:
-            messagebox.showerror("Error", "Stock, Costo y Precio deben ser numéricos.")
+            # Convertir a enteros/floats
+            stock = int(stock_str) if stock_str.strip() != "" else 0
+            cost = float(cost_str) if cost_str.strip() != "" else 0.0  # "1000" → 1000.0
+            price = float(price_str) if price_str.strip() != "" else 0.0
+        except ValueError as e:
+            messagebox.showerror("Error", f"Dato inválido: {str(e)}")
+            return
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al convertir valores: {str(e)}")
             return
 
-        # Se realiza una única llamada para actualizar todos los campos del producto.
-        self.db.update_product(name, cost, price, stock, category, desc, code)
+        # Validación adicional de números positivos
+        if stock < 0 or cost < 0 or price < 0:
+            messagebox.showerror("Error", "Stock, Costo y Precio deben ser mayores o iguales a 0.")
+            return
 
+        # Actualizar en la base de datos
+        self.db.update_product(name, cost, price, stock, category, desc, code)
         messagebox.showinfo("Éxito", f"Producto '{code}' modificado correctamente.")
 
     def show_selection_dialog(self, products):
@@ -257,15 +266,13 @@ class ProductManagementViewController:
             "¡Esta acción es irreversible!\n"
             "Todos los eventos asociados a esta categoría quedarán sin clasificación.")
         if confirm:
-            result = self.db.delete_category(selected_cat)
-            if result:
-                messagebox.showinfo("Categoría eliminada", f"La categoría '{selected_cat}' ha sido eliminada.")
-                updated_cats = self.db.get_categories()
-                # Actualiza ambas vistas
-                self.view.set_categories(updated_cats)
-                self.main_controller.admin_view_controller.refresh_categories()  # <-- Nueva línea
+            if self.db.delete_category(selected_cat):
+                messagebox.showinfo("Éxito", f"Categoría '{selected_cat}' eliminada.")
+                # Actualizar todas las vistas
+                self.main_controller.refresh_all_categories()  # <--- Aquí
             else:
-                messagebox.showerror("Error", f"No se pudo eliminar la categoría '{selected_cat}'.")
+                messagebox.showerror("Error", "No se pudo eliminar la categoría.")
+                
     # ----------------------------------------------
     # Métodos internos
     # ----------------------------------------------
@@ -274,8 +281,8 @@ class ProductManagementViewController:
         self.view.set_code(product.code)
         self.view.set_name(product.name)
         self.view.set_stock(str(product.stock))
-        self.view.set_cost(str(product.cost))
-        self.view.set_price(str(product.price))
+        self.view.set_cost(product.cost)
+        self.view.set_price(product.price)
         self.view.set_description(product.description)
         cats = self.db.get_categories()
         self.view.set_categories(cats)

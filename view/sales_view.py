@@ -89,7 +89,8 @@ class SalesView(tk.Frame):
             bd=0,
             highlightthickness=0,
             cursor="hand2",
-            command=self.controller.event_cash_payment
+            command=self.controller.event_cash_payment,
+            takefocus=0
         ).pack(side="left", padx=10)
 
         # Botón Tarjeta
@@ -168,7 +169,8 @@ class SalesView(tk.Frame):
             bg=self.rojo,
             fg=self.blanco,
             font=("Sans-serif", 12, "bold"),
-            command=self.controller.event_remove_product
+            command=self.controller.event_remove_product,
+            takefocus=0
         )
         self.delete_btn.pack(fill="x", pady=5)
         
@@ -222,11 +224,19 @@ class SalesView(tk.Frame):
                 sp.quantity
             ))
 
-    def set_total(self, total_str):
-        self.total_label.config(text=f"Total Venta: $ {total_str}")
+    def set_total(self, total):
+        # Asegúrate de convertir "total" a float antes de formatear
+        try:
+            total_num = float(total)  # Convertir a número si es cadena
+            formatted_total = format_price(total_num, decimals=0)
+            self.total_label.config(text=f"Total Venta: $ {formatted_total}")
+        except ValueError:
+            # Manejar error si no se puede convertir a número
+            self.total_label.config(text=f"Total Venta: $0")
 
     def clear_received_amount(self):
         self.recibe_entry.delete(0, tk.END)
 
     def get_received_amount(self):
         return self.recibe_entry.get().strip()
+    

@@ -234,11 +234,6 @@ class AdminView(tk.Frame):
     # Métodos que el controller puede usar para actualizar la vista
     # --------------------------------------------------------------------------
     def load_table(self, products):
-        """
-        Recibe una lista de objetos Product y los muestra en el Treeview.
-        Cada Product tiene: code, name, cost, price, stock, category, description
-        """
-        # Limpiar tabla
         for item in self.inventory_tree.get_children():
             self.inventory_tree.delete(item)
         
@@ -246,16 +241,15 @@ class AdminView(tk.Frame):
             self.inventory_tree.insert("", "end", values=("", "Tabla sin contenido", "", "", "", "", ""))
         else:
             for p in products:
-                # p es un objeto Product (según tu modelo)
                 code = p.code
                 name = p.name
                 stock = p.stock
-                cost = f"{p.cost:.2f}"
-                price = f"{p.price:.2f}"
+                cost = f"{p.cost:.2f}"  # Formateado
+                price = f"{p.price:.2f}"  # Formateado
                 category = p.category
                 desc = p.description
                 self.inventory_tree.insert("", "end", values=(code, name, stock, cost, price, category, desc))
-    
+        
     def set_inventory_value(self, value):
         """
         Actualiza la etiqueta con la valorización total del inventario.
@@ -263,19 +257,15 @@ class AdminView(tk.Frame):
         self.valuation_amount_label.config(text=f"${value:.2f}")
     
     def set_categories(self, categories):
-        """
-        Actualiza la lista de categorías en el combobox. 
-        categories es una lista de strings ordenada desde la BD.
-        """
-        # Añadir "Todas" al inicio y asegurar orden
-        combo_values = ["Todas"] + sorted(categories)  # Ordenamos por si acaso
-        self.category_combobox.config(values=combo_values)
-        self.category_combobox.current(0)  # Seleccionar "Todas" por defecto
-    
+        if "Todas" not in categories:
+            categories = ["Todas"] + categories
+        self.category_combobox["values"] = categories
+        self.category_combobox.current(0)
+
+    def set_selected_category(self, category):
+        self.category_combobox.set(category)
+
     def get_selected_category(self):
-        """
-        Retorna la categoría seleccionada en el combobox.
-        """
         return self.category_combobox.get()
     
     def get_new_category(self):

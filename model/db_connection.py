@@ -95,9 +95,11 @@ class DBConnection:
     def delete_category(self, category_name):
         try:
             self.cursor.execute("DELETE FROM categories WHERE category_name = %s", (category_name,))
+            self.conn.commit()  # ¡Commit esencial!
             return True
         except Exception as e:
-            print("Error al eliminar categoría:", e)
+            print(f"Error eliminando categoría: {e}")
+            self.conn.rollback()
             return False
 
     # PRODUCTOS
@@ -169,13 +171,18 @@ class DBConnection:
 
     def add_receipt(self, receipt):
         self.cursor.execute("""
-            INSERT INTO receipts (total, date, time, payment_method)
-            VALUES (%s, %s, %s, %s)
-            RETURNING idReceipt
-        """, (receipt.total_sale, receipt.date, receipt.time, receipt.payment_method))
+        INSERT INTO receipts (total, date, time, payment_method)
+        VALUES (%s, %s, %s, %s)
+        RETURNING idReceipt
+        """, (
+        receipt.total,
+        receipt.date,
+        receipt.time,
+        receipt.payment_method
+        ))
     
         receipt_id = self.cursor.fetchone()['idreceipt']
-    
+
         for sp in receipt.sold_products:
             self.cursor.execute("""
                 INSERT INTO sold_products (idReceipt, codeP, quantity)
@@ -183,8 +190,9 @@ class DBConnection:
             """, (receipt_id, sp.product.code, sp.quantity))
             self.update_stock(sp.product.code, -sp.quantity)
     
-        return receipt_id  # Añadir este return
-
+        self.conn.commit()
+        return receipt_id
+    
     def get_receipts_in_range(self, start_date, end_date):
         self.cursor.execute("""
             SELECT idReceipt, total, date, time, payment_method
@@ -195,11 +203,11 @@ class DBConnection:
         receipts = []
         for row in self.cursor.fetchall():
             receipt = Receipt(
-                id=row['idreceipt'],
-                total_sale=row['total'],
-                date=row['date'],
-                time=row['time'],
-                payment_method=row['payment_method']
+            id=row['idreceipt'],
+            total=row['total'],
+            date=row['date'],
+            time=row['time'],
+            payment_method=row['payment_method']
             )
             receipt.sold_products = self.get_sold_products_for_receipt(row['idreceipt'])
             receipts.append(receipt)
@@ -249,17 +257,6 @@ class DBConnection:
         except Exception as e:
             print(f"Error en búsqueda: {str(e)}")
             return []
-        
-    
-    # LIMPIEZA
-    def clear_database(self):
-        try:
-            self.cursor.execute("DELETE FROM sold_products")
-            self.cursor.execute("DELETE FROM receipts")
-            self.cursor.execute("DELETE FROM products")
-            self.cursor.execute("DELETE FROM categories")
-        except Exception as e:
-            print("Error al limpiar la base de datos:", e)
 
     def close_connection(self):
         self.cursor.close()

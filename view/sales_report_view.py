@@ -210,10 +210,10 @@ class SalesReportView(tk.Frame):
     
     # Método para actualizar los totales en el resumen
     def set_totals(self, total, cash, card, transfer):
-        self.total_amount_label.config(text=f"${total:.2f}")
-        self.cash_label.config(text=f"Efectivo        ${cash:.2f}")
-        self.card_label.config(text=f"Tarjeta         ${card:.2f}")
-        self.transfer_label.config(text=f"Transferencia  ${transfer:.2f}")
+        self.total_amount_label.config(text=f"${format_price(total, decimals=2)}")
+        self.cash_label.config(text=f"Efectivo        ${format_price(cash, decimals=2)}")
+        self.card_label.config(text=f"Tarjeta         ${format_price(card, decimals=2)}")
+        self.transfer_label.config(text=f"Transferencia  ${format_price(transfer, decimals=2)}")
     
     # Eventos de los botones
     def on_search_click(self):

@@ -4,21 +4,33 @@ from tkinter import simpledialog, messagebox
 from model.sold_product import SoldProduct
 from model.receipt import Receipt
 import datetime
+import logging
+
+from utils.printer_manager import XPrinterManager
 
 class SalesViewController:
     def __init__(self, parent_frame, main_controller, db):
         self.parent_frame = parent_frame
         self.main_controller = main_controller
         self.db = db
-        self.buffer_codigo = ""  # Buffer para el código de barras
-        
-        # 1° Crear la vista PRIMERO
+        self.buffer_codigo = ""
+
+        # 1° Creación de la vista
         from view.sales_view import SalesView
-        self.view = SalesView(self.parent_frame, self)  # ¡Ahora existe!
+        self.view = SalesView(self.parent_frame, self)
         
-        # 2° Configurar bindings DESPUÉS de crear la vista
-        self.view.focus_set()  # Forzar foco para capturar eventos
-        self.view.bind("<KeyRelease>", self.handle_barcode_input)  # Captura global
+        # 2° Vinculación de eventos a self.view
+        self.view.bind("<Button-1>", self._handle_mouse_click)
+        
+        # Configuración del logger
+        global logger
+        logger = logging.getLogger(__name__)
+        logging.basicConfig(level=logging.INFO)
+        self.buffer_codigo = ""  
+        
+        # 3° Inicialización de la vista
+        self.view.focus_set()  
+        self.view.bind("<KeyRelease>", self.handle_barcode_input)  
         self.sold_products = []
         self.initialize()
         
@@ -26,10 +38,9 @@ class SalesViewController:
         self.view.recibe_entry.bind("<FocusOut>", self._resume_barcode_reader)
 
     def initialize(self):
-        """Reinicia la lista de venta y refresca la tabla y total."""
-        self.sold_products = []
+        self.sold_products.clear()  # Vacía la lista existente
         self.view.load_table(self.sold_products)
-        self.view.set_total("0.0")
+        self.view.set_total(0.0)
 
     # ----------------------------------------------------------------
     # Métodos que la vista llama cuando se presionan los botones
@@ -37,15 +48,25 @@ class SalesViewController:
     def event_back(self):
         """Botón 'Volver al Menú'."""
         self.main_controller.show_login_view()
+        self.view.master.after(100, self.activate_barcode_reader)
+
+    def activate_barcode_reader(self):
+        """Fuerza el foco y reactiva los bindings"""
+        self.view.focus_set()
+        self.view.bind("<KeyRelease>", self.handle_barcode_input)
+        logger.info("Lector ACTIVADO")
 
     def _pause_barcode_reader(self, event):
         """Pausa la lectura de códigos de barras cuando el campo Recibe tiene foco"""
         self.view.unbind("<KeyRelease>")
+        logger.info("Lector PAUSADO (foco en Recibe)")
 
     def _resume_barcode_reader(self, event):
-        """Reanuda la lectura cuando el campo Recibe pierde el foco"""
-        self.view.bind("<KeyRelease>", self.handle_barcode_input)
-        self.view.focus_set()
+        """Solo reanuda lecturas si el foco NO está en Recibe"""
+        if self.view.focus_get() != self.view.recibe_entry:
+            self.view.bind("<KeyRelease>", self.handle_barcode_input)
+            self.view.focus_set()
+            logger.info("Lector REANUDADO")
 
     def handle_barcode_input(self, event):
         if self.view.recibe_entry.focus_get() == self.view.recibe_entry:
@@ -77,6 +98,7 @@ class SalesViewController:
         self.sold_products.append(new_sp)
         self.refresh_sales_table()
 
+
     def event_remove_product(self):
         """Elimina EXACTAMENTE el ítem seleccionado en la tabla"""
         if not self.sold_products:
@@ -96,15 +118,23 @@ class SalesViewController:
         if 0 <= selected_index < len(self.sold_products):
             del self.sold_products[selected_index]
             self.refresh_sales_table()
-            messagebox.showinfo("Éxito", "Ítem eliminado")
+
+            self.view.after(100, self.force_focus_restore)
+
+    def force_focus_restore(self):
+        """Restaura el foco SIEMPRE, pero pausa si está en Recibe."""
+        if self.view.focus_get() == self.view.recibe_entry:
+            self._pause_barcode_reader(None)  # Pausar si está en Recibe
         else:
-            messagebox.showwarning("Error", "Ítem no encontrado")
-            
+            self.view.focus_set()
+            self.activate_barcode_reader()  # Reactivar bindings
+
+
     def event_cash_payment(self):
         try:
             # 1. Validar que haya productos en la venta
-            total_sale = float(self.calculate_total())
-            if total_sale <= 0.0:
+            total = float(self.calculate_total())
+            if total <= 0.0:
                 raise ValueError("No hay productos en la venta")
 
             # 2. Obtener y validar el monto recibido
@@ -113,15 +143,16 @@ class SalesViewController:
                 raise ValueError("Ingrese la cantidad recibida")
             
             received = float(received_str)
-            if received < total_sale:
-                raise ValueError(f"Monto insuficiente. Faltan ${total_sale - received:.2f}")
+            if received < total:
+                raise ValueError(f"Monto insuficiente. Faltan ${total - received:.2f}")
 
             # 3. Calcular vuelto y generar recibo
-            change_due = received - total_sale
-            self.generate_receipt("Efectivo", total_sale, change_due)
+            change_due = received - total
+            self.generate_receipt("Efectivo", total, change_due, received)
             
             # 4. Limpiar campos después de la venta
             self.view.clear_received_amount()
+            self.force_focus_restore()
 
 
         except ValueError as e:
@@ -131,11 +162,12 @@ class SalesViewController:
 
     def event_card_payment(self):
         try:
-            total_sale = float(self.calculate_total())
-            if total_sale <= 0.0:
+            total = float(self.calculate_total())
+            if total <= 0.0:
                 raise ValueError("No hay productos en la venta")
                 
-            self.generate_receipt("Tarjeta", total_sale, 0.0)
+            self.generate_receipt("Tarjeta", total, 0.0, total)
+            self.force_focus_restore()
             
         except ValueError as e:
             messagebox.showerror("Error en Pago", str(e))
@@ -144,11 +176,12 @@ class SalesViewController:
 
     def event_transfer_payment(self):
         try:
-            total_sale = float(self.calculate_total())
-            if total_sale <= 0.0:
+            total = float(self.calculate_total())
+            if total <= 0.0:
                 raise ValueError("No hay productos en la venta")
                 
-            self.generate_receipt("Transferencia", total_sale, 0.0)
+            self.generate_receipt("Transferencia", total, 0.0)
+            self.force_focus_restore()
             
         except ValueError as e:
             messagebox.showerror("Error en Pago", str(e))
@@ -167,41 +200,87 @@ class SalesViewController:
         for sp in self.sold_products:
             total += sp.total_partial
         return f"{total:.2f}"
-
-    def generate_receipt(self, payment_method, total_sale, change_due):
+    
+    def generate_receipt(self, payment_method, total, change_due, received=None):
         now = datetime.datetime.now()
         receipt = Receipt(
-            date=now.date(),
-            time=now.time(),
-            payment_method=payment_method,
-            total_sale=total_sale   
+        date=now.date(),
+        time=now.time(),
+        payment_method=payment_method,
+        total=total
         )
-        receipt.sold_products = self.sold_products
-        self.db.add_receipt(receipt)
 
-        # Cuando la venta está lista, mostramos el Recibo
+        receipt.sold_products = self.sold_products.copy()  # Copia, no referencia
+
+        receipt.id = self.db.add_receipt(receipt)
+        grouped_items = {}
+        for sp in self.sold_products:
+            code = sp.product.code
+            if code in grouped_items:
+                grouped_items[code]["qty"] += sp.quantity
+                grouped_items[code]["total"] += sp.quantity * sp.product.price
+            else:
+                grouped_items[code] = {
+                    "name": sp.product.name,
+                    "qty": sp.quantity,
+                    "price": sp.product.price,
+                    "total": sp.quantity * sp.product.price
+                }
+
+            receipt_data = {
+                "receipt_id": receipt.id,
+                "date": now.strftime("%Y-%m-%d"),
+                "time": now.strftime("%H:%M:%S"),
+                "items": list(grouped_items.values()),
+                "total": receipt.total,
+                "received": received if received else receipt.total,
+                "change": change_due
+            }
+        
+        # 3. Imprimir directamente aquí
+        try:
+            printer = XPrinterManager()
+            printer.print_receipt(receipt_data)
+        except Exception as e:
+            messagebox.showerror("Error Impresión", f"No se pudo imprimir: {str(e)}")
+        
+        # 4. Mostrar voucher (opcional, si aún lo necesitas)
         self.main_controller.show_voucher_view(receipt, change_due)
-
-        # Limpia la venta actual
+        
+        # 5. Reiniciar venta
         self.initialize()
+
+    def _handle_mouse_click(self, event):
+        """Restaura el foco si el clic no es en Recibe o botones de pago."""
+        widget_clickeado = self.view.winfo_containing(event.x_root, event.y_root)
+        
+        # Lista de widgets que NO deben interrumpir el lector
+        widgets_permitidos = [
+            self.view,  # Frame principal
+            self.view.tree,  # Tabla de productos
+            self.view.delete_btn,  # Botón eliminar
+        ]
+        
+        # Si el clic es en un widget no permitido (ej: botones de pago), restaurar foco
+        if widget_clickeado not in widgets_permitidos:
+            self.force_focus_restore()
 
     def process_payment(self):
         """Procesa el pago y devuelve el foco al frame principal"""
         try:
             received_str = self.view.get_received_amount().strip()
             if not received_str:
-                raise ValueError("Ingrese el monto recibido")
-            
-            total = float(self.calculate_total())
-            received = float(received_str)
-            
-            if received < total:
-                messagebox.showerror("Error", "Monto insuficiente")
-                return
+                raise ValueError("Ingrese el monto recibido")               
+                total = float(self.calculate_total())
+                received = float(received_str)
                 
-            # Procesar pago exitoso
-            self.view.clear_received_amount()
-            self.view.focus_set()  # Foco de vuelta al frame
-            
+                if received < total:
+                    messagebox.showerror("Error", "Monto insuficiente")
+                    return
+                    
+                # Procesar pago exitoso
+                self.view.clear_received_amount()
+                self.view.focus_set()  # Foco de vuelta al frame
+                
         except ValueError as e:
             messagebox.showerror("Error", str(e))
