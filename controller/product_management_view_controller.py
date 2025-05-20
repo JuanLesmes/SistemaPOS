@@ -166,6 +166,8 @@ class ProductManagementViewController:
         # Actualizar en la base de datos
         self.db.update_product(name, cost, price, stock, category, desc, code)
         messagebox.showinfo("Éxito", f"Producto '{code}' modificado correctamente.")
+        self.view.clear_fields()
+        self.view.clear_search()  # Limpiar búsqueda al final
 
     def show_selection_dialog(self, products):
         dialog = tk.Toplevel(self.parent)

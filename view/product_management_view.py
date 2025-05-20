@@ -1,6 +1,10 @@
 import tkinter as tk
 from tkinter import ttk
+import customtkinter as ctk
 from utils.formatters import format_price  # Si se usa para formatear precios en otros lugares
+
+ctk.set_appearance_mode("light")   # light / dark
+ctk.set_default_color_theme("blue")  # blue / dark-blue / green
 
 class ProductManagementView(tk.Frame):
     """
@@ -11,8 +15,6 @@ class ProductManagementView(tk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        
-        # Configuración de color y tamaño base
         fondo = "#9db7b1"          # Fondo general
         self.config(bg=fondo)
         self.pack(fill="both", expand=True)
@@ -31,157 +33,167 @@ class ProductManagementView(tk.Frame):
         negro      = "#000000"
         
         # Fuentes
-        font_header = ("Sans-serif", 20, "bold")
-        font_label  = ("Sans-serif", 12, "bold")
-        font_entry  = ("Sans-serif", 12)
-        font_button = ("Sans-serif", 14, "bold")
+        font_header = ("Segoe UI", 20, "bold")
+        font_label  = ("Segoe UI", 15, "bold")
+        font_entry  = ("Segoe UI", 15)
+        font_button = ("Segoe UI", 15, "bold")
 
-        # ----------------------------------------------------------------
-        # 1. Cabecera (fondo header_color, título centrado)
-        # ----------------------------------------------------------------
-        header_frame = tk.Frame(self, bg=header_color)
+        # Cabecera
+        header_frame = ctk.CTkFrame(self, fg_color=header_color, corner_radius=0)
         header_frame.place(relx=0, rely=0, relwidth=1, relheight=0.15)
+        ctk.CTkLabel(header_frame, text="Gestión de Productos", fg_color=header_color, text_color="black", font=font_header).pack(expand=True)
 
-        lbl_title = tk.Label(
-            header_frame,
-            text="Gestión de Productos",
-            bg=header_color,
-            fg=negro,
-            font=font_header
-        )
-        lbl_title.place(relx=0.5, rely=0.5, anchor="center")
-
-        # ----------------------------------------------------------------
-        # 2. Zona principal (campos de ingreso a la izquierda)
-        #    y botones en un frame vertical a la derecha.
-        # ----------------------------------------------------------------
-        body_frame = tk.Frame(self, bg=fondo)
+        # Zona principal
+        body_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
         body_frame.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
 
-        # Fila 1: Código y Nombre
-        
-        lbl_code = tk.Label(body_frame, text="Código", bg=fondo, font=font_label)
-        lbl_code.place(relx=0.02, rely=0.05)
-        self.entry_code = tk.Entry(body_frame, font=font_entry, width=25)  # Aumentado
-        self.entry_code.place(relx=0.02, rely=0.12)
+        # Usamos grid en body_frame
+        # Configuramos columnas para que las etiquetas estén alineadas y las entradas también
+        for col in range(4):
+            body_frame.grid_columnconfigure(col, weight=1, uniform="col")
 
-        lbl_name = tk.Label(body_frame, text="Nombre", bg=fondo, font=font_label)
-        lbl_name.place(relx=0.25, rely=0.05)
-        self.entry_name = tk.Entry(body_frame, font=font_entry, width=30)  # Aumentado
-        self.entry_name.place(relx=0.25, rely=0.12)
+       # Cabecera
+        header_frame = ctk.CTkFrame(self, fg_color=header_color, corner_radius=0)
+        header_frame.place(relx=0, rely=0, relwidth=1, relheight=0.15)
+        ctk.CTkLabel(
+            header_frame,
+            text="Gestión de Productos",
+            fg_color=header_color,
+            text_color="black",
+            font=font_header
+        ).place(relx=0.5, rely=0.5, anchor="center")
 
-        # Fila 2: Categoría y Descripción
-        lbl_category = tk.Label(body_frame, text="Categoría", bg=fondo, font=font_label)
-        lbl_category.place(relx=0.02, rely=0.25)
-        self.cmb_category = ttk.Combobox(body_frame, values=[], state="readonly", width=20)  # Aumentado
-        self.cmb_category.place(relx=0.02, rely=0.32)
-        
-        self.delete_category_button = tk.Button(
-            body_frame,
-            text="Eliminar Categoría",
-            bg=rojo,
-            fg="white",
-            font=font_button,
+        # Zona principal
+        body_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
+        body_frame.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
+
+        row_gap = 0.17
+        offset_label = 0.05
+        offset_entry = 0.10
+
+        # Fila 0 - Código y Nombre
+        row = 0
+        ctk.CTkLabel(body_frame, text="Código", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
+        self.entry_code = ctk.CTkEntry(body_frame, width=200, height=30, corner_radius=15, font=font_entry)
+        self.entry_code.place(relx=0.02, rely=row * row_gap + offset_entry)
+
+        ctk.CTkLabel(body_frame, text="Nombre", text_color="black", font=font_label).place(relx=0.17, rely=row * row_gap + offset_label)
+        self.entry_name = ctk.CTkEntry(body_frame, width=250, height=30, corner_radius=15, font=font_entry)
+        self.entry_name.place(relx=0.17, rely=row * row_gap + offset_entry)
+
+        # Fila 1 - Descripción
+        row = 1
+        ctk.CTkLabel(body_frame, text="Descripción", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
+        self.entry_description = ctk.CTkTextbox(body_frame, width=500, height=50, corner_radius=15, font=font_entry)
+        self.entry_description.place(relx=0.02, rely=row * row_gap + offset_entry)
+
+        # Fila 2 - Categoría y Stock
+        row = 2
+        ctk.CTkLabel(body_frame, text="Categoría", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
+        self.cmb_category = ttk.Combobox(body_frame, values=[], state="readonly", width=20)
+        self.cmb_category.place(relx=0.02, rely=row * row_gap + offset_entry)
+
+        # Botón justo debajo del combobox (agregamos +0.07 de separación vertical)
+        ctk.CTkButton(
+            body_frame, text="Eliminar Categoría", corner_radius=15,
+            fg_color="#FF0000", font=font_button,
             command=self.controller.event_delete_category
+        ).place(relx=0.02, rely=row * row_gap + offset_entry + 0.07)
+
+        ctk.CTkLabel(body_frame, text="Stock", text_color="black", font=font_label).place(relx=0.22, rely=row * row_gap + offset_label)
+        self.entry_stock = ctk.CTkEntry(body_frame, width=150, height=30, corner_radius=15, font=font_entry)
+        self.entry_stock.place(relx=0.22, rely=row * row_gap + offset_entry)
+
+        # Fila 3 - Costo, Ganancia %, Precio
+        row = 3
+        ctk.CTkLabel(body_frame, text="Costo", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
+        self.entry_cost = ctk.CTkEntry(body_frame, width=150, height=30, corner_radius=15, font=font_entry)
+        self.entry_cost.place(relx=0.02, rely=row * row_gap + offset_entry)
+        self.entry_cost.bind("<FocusOut>", lambda e: self._on_gain_selected())
+
+        ctk.CTkLabel(body_frame, text="Ganancia %", text_color="black", font=font_label).place(relx=0.14, rely=row * row_gap + offset_label)
+        self.cmb_gain = ttk.Combobox(body_frame, values=["10", "20", "30", "40", "50", "100", "200"], state="readonly", width=10)
+        self.cmb_gain.current(0)
+        self.cmb_gain.place(relx=0.14, rely=row * row_gap + offset_entry)
+        self.cmb_gain.bind("<<ComboboxSelected>>", lambda e: self._on_gain_selected())
+
+        ctk.CTkLabel(body_frame, text="Precio", text_color="black", font=font_label).place(relx=0.22, rely=row * row_gap + offset_label)
+        self.entry_price = ctk.CTkEntry(body_frame, width=150, height=30, corner_radius=15, font=font_entry, state="readonly")
+        self.entry_price.place(relx=0.22, rely=row * row_gap + offset_entry)
+
+
+
+        # Botones y búsqueda
+        btn_frame = ctk.CTkFrame(body_frame, fg_color="#9db7b1", corner_radius=0)
+        btn_frame.place(relx=0.5, rely=0.05, relwidth=0.25, relheight=0.9, anchor="n")
+
+        ctk.CTkLabel(
+            btn_frame, text="Ingrese Nombre o código del producto:",
+            font=font_label, text_color="black"
+        ).pack(pady=(10,5))
+
+        self.entry_search = ctk.CTkEntry(
+            btn_frame, width=200, height=30,
+            corner_radius=15, font=font_entry
         )
-        self.delete_category_button.place(relx=0.02, rely=0.40)
-        
-        lbl_desc = tk.Label(body_frame, text="Descripción", bg=fondo, font=font_label)
-        lbl_desc.place(relx=0.25, rely=0.25)
-        self.entry_description = tk.Entry(body_frame, font=font_entry, width=50)  # Aumentado
-        self.entry_description.place(relx=0.25, rely=0.32)
+        self.entry_search.pack(pady=(10,5))
+        ctk.CTkButton(
+            btn_frame, text="Buscar", text_color="black", corner_radius=15,
+            fg_color="#0000FF", font=font_button,
+            command=self.controller.event_search_scan,
+            height=40
+        ).pack(fill="x", pady=5)
+        ctk.CTkButton(
+            btn_frame, text="Agregar Producto", text_color="black", corner_radius=15,
+            fg_color="#28A745", font=font_button,
+            command=self.controller.event_add_product,
+            height=40
+        ).pack(fill="x", pady=5)
+        ctk.CTkButton(
+            btn_frame, text="Modificar Producto", text_color="black", corner_radius=15,
+            fg_color="#FFD700", font=font_button,
+            command=self.controller.event_modify_product,
+            height=40
+        ).pack(fill="x", pady=5)
+        ctk.CTkButton(
+            btn_frame, text="Eliminar Producto", text_color="black", corner_radius=15,
+            fg_color="#FF0000", font=font_button,
+            command=self.controller.event_delete_product,
+            height=40
+        ).pack(fill="x", pady=5)
 
-        # Fila 3: Stock, Costo y Precio
-        lbl_stock = tk.Label(body_frame, text="Stock", bg=fondo, font=font_label)
-        lbl_stock.place(relx=0.02, rely=0.55)
-        self.entry_stock = tk.Entry(body_frame, font=font_entry, width=15)  # Aumentado
-        self.entry_stock.place(relx=0.02, rely=0.62)
+        # Contenedor visual para resultados de búsqueda (por ahora solo estético)
+        results_frame = ctk.CTkFrame(body_frame, fg_color="#ffffff", corner_radius=10, border_width=2, border_color="#cccccc")
+        results_frame.place(relx=0.65, rely=0.05, relwidth=0.33, relheight=0.9)
 
-        lbl_cost = tk.Label(body_frame, text="Costo", bg=fondo, font=font_label)
-        lbl_cost.place(relx=0.25, rely=0.55)
-        self.entry_cost = tk.Entry(body_frame, font=font_entry, width=15)  # Aumentado
-        self.entry_cost.place(relx=0.25, rely=0.62)
 
-        lbl_price = tk.Label(body_frame, text="Precio", bg=fondo, font=font_label)
-        lbl_price.place(relx=0.45, rely=0.55)
-        self.entry_price = tk.Entry(body_frame, font=font_entry, width=15)  # Aumentado
-        self.entry_price.place(relx=0.45, rely=0.62)
+        ctk.CTkLabel(
+            results_frame,
+            text="Resultados de Búsqueda",
+            font=font_label,
+            text_color="black"
+        ).pack(pady=(10, 5))
 
-        # --- Botones en el lado derecho, en un frame vertical ---
-        button_frame = tk.Frame(body_frame, bg=fondo)
-        button_frame.place(relx=0.75, rely=0.1, relwidth=0.2, relheight=0.8)
+        # Placeholder visual simulado
+        for i in range(5):  # Simulamos 5 resultados como ejemplo
+            ctk.CTkLabel(
+                results_frame,
+                text=f"Producto {i+1}",
+                font=font_entry,
+                text_color="#333333",
+                anchor="w"
+            ).pack(fill="x", padx=10, pady=2)
 
-        # --- campo de búsqueda ---
-        lbl_search = tk.Label(
-            button_frame,
-            text="Buscar (Código/Nombre):",
-            bg=fondo,
-            font=("Sans-serif", 10, "bold")
-        )
-        lbl_search.pack(pady=(0, 5), fill="x")
 
-        self.entry_search = tk.Entry(
-            button_frame,
-            font=font_entry,
-            width=20
-        )
-        self.entry_search.pack(pady=(0, 15), fill="x")
-
-        # --- Botones debajo del campo de búsqueda ---
-        btn_search = tk.Button(
-            button_frame,
-            text="Buscar",
-            bg=azul, fg="white",
-            font=font_button,
-            command=self.controller.event_search_scan
-        )
-        btn_search.pack(fill="x", pady=10)
-
-        # Botón "Agregar Producto"
-        btn_add_product = tk.Button(
-            button_frame,
-            text="Agregar Producto",
-            bg=verde,
-            fg="white",
-            font=font_button,
-            command=self.controller.event_add_product
-        )
-        btn_add_product.pack(fill="x", pady=10)
-
-        # Botón "Modificar Producto"
-        btn_modify_product = tk.Button(
-            button_frame,
-            text="Modificar Producto",
-            bg=amarillo, fg=negro,
-            font=font_button,
-            command=self.controller.event_modify_product
-        )
-        btn_modify_product.pack(fill="x", pady=10)
-
-        # Botón "Eliminar Producto"
-        btn_delete_product = tk.Button(
-            button_frame,
-            text="Eliminar Producto",
-            bg=rojo, fg="white",
-            font=font_button,
-            command=self.controller.event_delete_product
-        )
-        btn_delete_product.pack(fill="x", pady=10)
-
-        # ----------------------------------------------------------------
-        # 3. Botón "Volver a gestión de Inventario" (parte inferior)
-        # ----------------------------------------------------------------
-        bottom_frame = tk.Frame(self, bg=fondo)
-        bottom_frame.place(relx=0, rely=0.85, relwidth=1, relheight=0.15)
-
-        btn_back_inventory = tk.Button(
-            bottom_frame,
-            text="Volver a gestión de Inventario",
-            bg=boton_principal, fg=negro,
-            font=("Sans-serif", 16, "bold"),
+        # Botón volver
+        ctk.CTkButton(
+            self, text="Volver a gestión de Inventario", text_color="black", corner_radius=15,
+            fg_color=boton_principal, font=font_button,
             command=self.controller.event_go_back_to_inventory
-        )
-        btn_back_inventory.place(relx=0.35, rely=0.2, relwidth=0.3, relheight=0.6)
+        ).place(relx=0.35, rely=0.85, relwidth=0.3, relheight=0.1)
+
+        # Cálculo inicial
+        self._on_gain_selected()
 
     # ------------------------------------------------------
     # Métodos getters/setters
@@ -224,8 +236,10 @@ class ProductManagementView(tk.Frame):
 
     def set_price(self, value):
         formatted_price = format_price(value, decimals=2)
+        self.entry_price.configure(state="normal")
         self.entry_price.delete(0, "end")
         self.entry_price.insert(0, formatted_price)
+        self.entry_price.configure(state="readonly")
 
     def get_category(self):
         return self.cmb_category.get().strip()
@@ -272,3 +286,20 @@ class ProductManagementView(tk.Frame):
 
     def get_new_category(self):
         return self.new_category_entry.get().strip()
+
+    def _on_gain_selected(self):
+        # Leer costo actual
+        cost_str = self.entry_cost.get().strip().replace(".", "").replace(",", ".")
+        try:
+            cost = float(cost_str) if cost_str else 0.0
+        except ValueError:
+            return
+
+        # Leer % de ganancia
+        gain_pct = float(self.cmb_gain.get())
+
+        # Precio = costo * (1 + ganancia/100)
+        price = cost * (1 + gain_pct / 100)
+
+        # Mostrarlo con formato
+        self.set_price(price)
