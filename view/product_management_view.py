@@ -162,27 +162,37 @@ class ProductManagementView(tk.Frame):
             height=40
         ).pack(fill="x", pady=5)
 
-        # Contenedor visual para resultados de búsqueda (por ahora solo estético)
-        results_frame = ctk.CTkFrame(body_frame, fg_color="#ffffff", corner_radius=10, border_width=2, border_color="#cccccc")
-        results_frame.place(relx=0.65, rely=0.05, relwidth=0.33, relheight=0.9)
+        # ————————————
+        # Panel derecho existente: results_frame
+        # ————————————
+        self.results_frame = ctk.CTkFrame(
+            body_frame,
+            fg_color="#ffffff",
+            corner_radius=10,
+            border_width=2,
+            border_color="#cccccc"
+        )
+        self.results_frame.place(relx=0.65, rely=0.05, relwidth=0.33, relheight=0.9)
 
-
-        ctk.CTkLabel(
-            results_frame,
+        self.results_title = ctk.CTkLabel(
+            self.results_frame,
             text="Resultados de Búsqueda",
             font=font_label,
             text_color="black"
-        ).pack(pady=(10, 5))
+        )
+        self.results_title.pack(pady=(10, 5))
 
-        # Placeholder visual simulado
-        for i in range(5):  # Simulamos 5 resultados como ejemplo
-            ctk.CTkLabel(
-                results_frame,
-                text=f"Producto {i+1}",
-                font=font_entry,
-                text_color="#333333",
-                anchor="w"
-            ).pack(fill="x", padx=10, pady=2)
+        # Contenedor interno para los resultados
+        self.results_container = ctk.CTkFrame(
+            self.results_frame,
+            fg_color="#ffffff",
+            corner_radius=0
+        )
+        self.results_container.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Lista para poder limpiar resultados más tarde
+        self._result_labels = []
+
 
 
         # Botón volver
@@ -254,11 +264,11 @@ class ProductManagementView(tk.Frame):
             self.cmb_category.current(0)
 
     def get_description(self):
-        return self.entry_description.get().strip()
+        return self.entry_description.get("1.0", "end").strip()
 
     def set_description(self, value):
-        self.entry_description.delete(0, "end")
-        self.entry_description.insert(0, value)
+        self.entry_description.delete("1.0", "end")
+        self.entry_description.insert("1.0", value)
 
     def clear_fields(self):
         self.set_code("")
@@ -303,3 +313,43 @@ class ProductManagementView(tk.Frame):
 
         # Mostrarlo con formato
         self.set_price(price)
+
+    def show_search_results(self, products, on_select_callback):
+        # Limpiar anteriores
+        for lbl in self._result_labels:
+            lbl.destroy()
+        self._result_labels.clear()
+
+        if not products:
+            none_lbl = ctk.CTkLabel(
+                self.results_container,
+                text="No se encontraron resultados.",
+                font=("Segoe UI", 12),
+                text_color="gray"
+            )
+            none_lbl.pack(fill="x", pady=5)
+            self._result_labels.append(none_lbl)
+            return
+
+        for prod in products:
+            # Formato con todos los campos
+            line = (
+                f"{prod.name}    "
+                f"{prod.category}    "
+                f"Stock: {prod.stock}    "
+                f"Precio: {format_price(prod.price, 2)}"
+            )
+            lbl = ctk.CTkLabel(
+                self.results_container,
+                text=line,
+                font=("Segoe UI", 12),
+                text_color="black",
+                anchor="w",
+                cursor="hand2",
+                wraplength=self.results_container.winfo_width() - 20
+            )
+            lbl.pack(fill="x", pady=2)
+            lbl.bind("<Button-1>", lambda e, p=prod: on_select_callback(p))
+            self._result_labels.append(lbl)
+            
+

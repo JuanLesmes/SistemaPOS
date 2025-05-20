@@ -28,38 +28,37 @@ class ProductManagementViewController:
         self.main_controller.show_admin_view()
 
     def event_search_scan(self):
-        search_term = self.view.get_search_term()
-        
-        if not search_term:
+        term = self.view.get_search_term()
+        if not term:
             messagebox.showwarning("Alerta", "Ingrese un criterio de búsqueda.")
             return
-        
-        # Normalizar el término para búsquedas parciales
-        normalized_term = search_term.strip().lower()  # <--- Añade esta línea
-        
-        # 1. Búsqueda exacta por código (case-sensitive)
-        exact_product = self.db.get_product(search_term)  # Usar el término original
-        if exact_product:
-            self.fill_form_with_product(exact_product)
+
+        normalized = term.strip().lower()
+
+        # Búsqueda exacta
+        exact = self.db.get_product(term)
+        if exact:
+            self.fill_form_with_product(exact)
+            # limpiamos panel
+            self.view.show_search_results([], lambda p: None)
             return
-        
-        # 2. Búsqueda ampliada con término normalizado
-        matched_products = self.db.search_products(normalized_term)  # <--- Usar término normalizado
-            
-        if not matched_products:
-            messagebox.showinfo("Info", f"No se encontraron resultados para: '{search_term}'.")
-            self.view.clear_search()  # Limpiar búsqueda también aquí
+
+        # Búsqueda parcial
+        matched = self.db.search_products(normalized)
+
+        # Si no hay coincidencias
+        if not matched:
+            messagebox.showinfo("Info", f"No se encontraron resultados para: '{term}'.")
+            self.view.clear_search()
+            self.view.show_search_results([], lambda p: None)
             return
-        
-        # Manejo de múltiples resultados
-        if len(matched_products) > 1:
-            selection = self.show_selection_dialog(matched_products)
-            if selection:
-                self.fill_form_with_product(selection)
-        else:
-            self.fill_form_with_product(matched_products[0])
-        
-        self.view.clear_search()  # Limpiar campo de búsqueda al final
+
+        # Hay al menos uno: mostrar todos en el panel
+        # Al hacer clic en uno, se rellena el formulario
+        self.view.show_search_results(matched, self.fill_form_with_product)
+        self.view.clear_search()
+
+
     def event_add_stock(self):
         code = self.view.get_code()
         if not code:
@@ -169,67 +168,6 @@ class ProductManagementViewController:
         self.view.clear_fields()
         self.view.clear_search()  # Limpiar búsqueda al final
 
-    def show_selection_dialog(self, products):
-        dialog = tk.Toplevel(self.parent)
-        dialog.title("Seleccionar Producto")
-        
-        # Frame principal
-        main_frame = tk.Frame(dialog, padx=20, pady=10)
-        main_frame.pack(fill="both", expand=True)
-        
-        # ListBox con scroll
-        scrollbar = tk.Scrollbar(main_frame)
-        scrollbar.pack(side="right", fill="y")
-        
-        listbox = tk.Listbox(
-            main_frame, 
-            width=60, 
-            height=8,
-            yscrollcommand=scrollbar.set,
-            font=("Sans-serif", 12)
-        )
-        
-        # Llenar con los productos
-        for p in products:
-            listbox.insert("end", str(p))
-        
-        listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=listbox.yview)
-        
-        def on_double_click(event):
-            on_select() 
-        
-        listbox.bind("<Double-Button-1>", on_double_click) 
-        
-        # Botón de selección
-        btn_frame = tk.Frame(dialog)
-        btn_frame.pack(pady=10)
-        
-        selected_product = None
-        
-        def on_select():
-            nonlocal selected_product
-            selection = listbox.curselection()
-            if selection:
-                selected_product = products[selection[0]]
-                dialog.destroy()
-        
-        btn_accept = tk.Button(
-            btn_frame,
-            text="Seleccionar",
-            command=on_select,
-            bg="#4CAF50",
-            fg="white",
-            font=("Sans-serif", 12, "bold"),
-            width=15)
-        btn_accept.pack(side="left", padx=10)
-        
-        # Hacer el diálogo modal
-        dialog.transient(self.parent)
-        dialog.grab_set()
-        self.parent.wait_window(dialog)
-        
-        return selected_product
 
     def event_delete_product(self):
         code = self.view.get_code()
