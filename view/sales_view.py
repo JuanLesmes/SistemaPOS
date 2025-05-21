@@ -1,13 +1,13 @@
-import tkinter as tk
+import customtkinter as ctk
 from tkinter import ttk
 from utils.formatters import format_price
 
-class SalesView(tk.Frame):
+class SalesView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, fg_color="#9db7b1")
         self.controller = controller
-        
-        # 1. Definir todos los colores como atributos
+
+        # Colores
         self.fondo = "#9db7b1"
         self.barra_arriba = "#10a2a7"
         self.boton_volver = "#b57426"
@@ -15,228 +15,209 @@ class SalesView(tk.Frame):
         self.negro = "#000000"
         self.rojo = "#FF0000"
         self.azul = "#0000FF"
-        self.gris_texto = "#808080"
 
-        # 2. Configuración inicial del frame
-        self.configure(width=800, height=600, bg=self.fondo)
+        # Configuración de estilo para botones y entradas
+        self.btn_cfg = {
+            "corner_radius": 12,
+            "height": 50,
+            "width": 200,
+            "font": ("Segoe UI", 16, "bold")
+        }
+
+        self.entry_cfg = {
+            "corner_radius": 10,
+            "height": 35,
+            "width": 150,
+            "font": ("Segoe UI", 14)
+        }
+
+        # Layout
         self.pack(fill="both", expand=True)
-        
-        # 3. Crear widgets
-        self.create_widgets()
-        
-        # 4. Configurar eventos
-        self.bind("<KeyRelease>", self.controller.handle_barcode_input)
-        self.recibe_entry.bind("<Return>", self._on_enter_recibe)
-        self.focus_set()
+        self._create_tree_style()
+        self._create_widgets()
 
-    def _on_enter_recibe(self, event):
-        """Maneja el Enter en el campo Recibe"""
+        # Eventos
+        root = self.winfo_toplevel()
+        root.bind_all("<KeyRelease>", self.controller.handle_barcode_input)
+        self.recibe_entry.focus_set()
+        self.recibe_entry.bind("<Return>", lambda e: self._on_enter_recibe())
+
+    def _on_enter_recibe(self):
         self.controller.process_payment()
         self.focus_set()
 
-    def create_widgets(self):
-        """Crea todos los widgets usando los colores de los atributos"""
-        # --------------------------------------------
-        # 1. CABECERA
-        # --------------------------------------------
-        header_frame = tk.Frame(self, bg=self.barra_arriba, height=60)
-        header_frame.pack(side="top", fill="x")
-        header_frame.pack_propagate(False)
+    def _create_tree_style(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Sales.Treeview.Heading",
+                        background=self.barra_arriba,
+                        foreground="white",
+                        font=("Segoe UI", 14, "bold"))
+        style.configure("Sales.Treeview",
+                        font=("Segoe UI", 12),
+                        rowheight=28,
+                        fieldbackground=self.blanco,
+                        background=self.blanco,
+                        foreground=self.negro,
+                        bordercolor="#CCCCCC",
+                        borderwidth=1)
+        style.map("Sales.Treeview",
+                  background=[("selected", "#A0E7E5")],
+                  foreground=[("selected", "black")])
 
-        # Título
-        tk.Label(
-            header_frame,
-            text="Venta de Productos",
-            bg=self.barra_arriba,
-            fg=self.negro,
-            font=("Sans-serif", 20, "bold")
+    def _create_widgets(self):
+        # 1) Cabecera
+        header = ctk.CTkFrame(self, fg_color=self.barra_arriba, corner_radius=0)
+        header.pack(side="top", fill="x", ipady=5)
+
+        # Título y botón en cabecera
+        ctk.CTkLabel(header,
+                    text="Venta de Productos",
+                    text_color=self.negro,
+                    font=("Segoe UI", 20, "bold")
         ).pack(side="left", padx=20)
 
-        # Botón Volver
-        tk.Button(
-            header_frame,
-            text="Volver al Menú",
-            bg=self.boton_volver,
-            fg=self.negro,
-            font=("Sans-serif", 14, "bold"),
-            width=12,
-            height=1,
-            bd=0,
-            highlightthickness=0,
-            cursor="hand2",
-            command=self.controller.event_back
+        ctk.CTkButton(header,
+                    text="Volver al Menú",
+                    fg_color=self.boton_volver,
+                    hover_color="#c7853a",
+                    text_color=self.negro,
+                    command=self.controller.event_back,
+                    **self.btn_cfg
         ).pack(side="right", padx=20)
 
-        # --------------------------------------------
-        # 2. SECCIÓN INFERIOR: MÉTODOS DE PAGO
-        # --------------------------------------------
-        payment_frame = tk.Frame(self, bg=self.fondo, height=60)
-        payment_frame.pack(side="bottom", fill="x")
-        payment_frame.pack_propagate(False)
+        # 2) Contenedor principal (tabla + sidebar)
+        main_container = ctk.CTkFrame(self, fg_color=self.fondo)
+        main_container.pack(side="top", fill="both", expand=True, padx=20, pady=10)
 
-        payment_container = tk.Frame(payment_frame, bg=self.fondo)
-        payment_container.place(relx=0.5, rely=0.5, anchor="center")
+        # 3) Contenedor de tabla (expandible)
+        table_frame = ctk.CTkFrame(
+            main_container,
+            fg_color=self.blanco,
+            corner_radius=8,
+            border_width=1,
+            border_color="#CCCCCC"
+        )
+        table_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
 
-        # Botón Efectivo
-        tk.Button(
-            payment_container,
-            text="Pago con Efectivo",
-            bg=self.azul,
-            fg=self.blanco,
-            font=("Sans-serif", 14, "bold"),
-            width=20,
-            height=2,
-            bd=0,
-            highlightthickness=0,
-            cursor="hand2",
-            command=self.controller.event_cash_payment,
-            takefocus=0
-        ).pack(side="left", padx=10)
-
-        # Botón Tarjeta
-        tk.Button(
-            payment_container,
-            text="Pago con Tarjeta",
-            bg=self.azul,
-            fg=self.blanco,
-            font=("Sans-serif", 14, "bold"),
-            width=20,
-            height=2,
-            bd=0,
-            highlightthickness=0,
-            cursor="hand2",
-            command=self.controller.event_card_payment
-        ).pack(side="left", padx=10)
-
-        # Botón Transferencia
-        tk.Button(
-            payment_container,
-            text="Transferencia",
-            bg=self.azul,
-            fg=self.blanco,
-            font=("Sans-serif", 14, "bold"),
-            width=20,
-            height=2,
-            bd=0,
-            highlightthickness=0,
-            cursor="hand2",
-            command=self.controller.event_transfer_payment
-        ).pack(side="left", padx=10)
-
-        # --------------------------------------------
-        # 3. CUERPO PRINCIPAL
-        # --------------------------------------------
-        main_frame = tk.Frame(self, bg=self.fondo)
-        main_frame.pack(side="top", fill="both", expand=True)
-
-        # Tabla de productos (Izquierda)
-        table_frame = tk.Frame(main_frame, bg=self.blanco, bd=1, relief="solid")
-        table_frame.pack(side="left", fill="both", expand=True, padx=20, pady=20)
-
-        # Crear Treeview (primero crearlo, luego configurar)
-        columns = ("codigo", "nombre", "valor", "cantidad")
+        # Configuración del Treeview
+        cols = ("codigo", "nombre", "valor", "cantidad")
         self.tree = ttk.Treeview(
-            table_frame, 
-            columns=columns, 
+            table_frame,
+            columns=cols,
             show="headings",
-            selectmode="browse"  # Configurar selectmode aquí
+            style="Sales.Treeview",
+            selectmode="browse"
         )
 
-        # Configurar encabezados y columnas 
-        self.tree.heading("codigo", text="Código")
-        self.tree.heading("nombre", text="Nombre")
-        self.tree.heading("valor", text="Valor")
-        self.tree.heading("cantidad", text="Cantidad")
-        self.tree.column("codigo", width=120, anchor="w")
-        self.tree.column("nombre", width=250, anchor="w")
-        self.tree.column("valor", width=120, anchor="e")
-        self.tree.column("cantidad", width=100, anchor="center")
+        # Scrollbar
+        scrollbar = ctk.CTkScrollbar(table_frame)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.configure(command=self.tree.yview)
 
-        self.tree.pack(fill="both", expand=True)
+        # Configurar columnas
+        for col, w, a, h in [
+            ("codigo", 120, "w", "Código"),
+            ("nombre", 250, "w", "Nombre"),
+            ("valor", 120, "e", "Valor"),
+            ("cantidad", 100, "center", "Cantidad"),
+        ]:
+            self.tree.heading(col, text=h)
+            self.tree.column(col, width=w, anchor=a)
+        
+        self.tree.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Sidebar derecha
-        sidebar = tk.Frame(main_frame, bg=self.fondo)
-        sidebar.pack(side="right", fill="y", padx=20, pady=20)
-        
-        # Panel de acciones
-        actions_frame = tk.Frame(sidebar, bg=self.fondo)
-        actions_frame.pack(fill="x", pady=10)
-        
-        # Botón Eliminar
-        self.delete_btn = tk.Button(
-            actions_frame,
-            text="Eliminar Producto",
-            bg=self.rojo,
-            fg=self.blanco,
-            font=("Sans-serif", 12, "bold"),
-            command=self.controller.event_remove_product,
-            takefocus=0
-        )
-        self.delete_btn.pack(fill="x", pady=5)
-        
-        # Panel de pago
-        payment_sidebar_frame = tk.Frame(sidebar, bg=self.fondo)
-        payment_sidebar_frame.pack(fill="x", pady=20)
-        
-        # Campo "Recibe"
-        tk.Label(
-            payment_sidebar_frame,
-            text="Recibe:",
-            bg=self.fondo,
-            fg=self.negro,
-            font=("Sans-serif", 14)
-        ).pack(anchor="w", pady=(0,5))
-        
-        self.recibe_entry = tk.Entry(
-            payment_sidebar_frame,
-            width=15,
-            bd=1,
-            fg=self.negro,
-            bg=self.blanco,
-            font=("Sans-serif", 14)
-        )
-        self.recibe_entry.pack(anchor="w")
-        
-        # Total
-        self.total_label = tk.Label(
-            payment_sidebar_frame,
-            text="Total: $0",
-            bg=self.fondo,
-            fg=self.negro,
-            font=("Sans-serif", 16, "bold")
-        )
-        self.total_label.pack(anchor="w", pady=20)
+        # 4) Sidebar derecho
+        sidebar = ctk.CTkFrame(main_container, fg_color=self.fondo, width=280)
+        sidebar.pack(side="right", fill="y", expand=False)
 
-    # -----------------------------------------------------------
-    # Métodos para el controlador
-    # -----------------------------------------------------------
+        # Botón eliminar producto
+        ctk.CTkButton(sidebar,
+                    text="Eliminar Producto",
+                    fg_color=self.rojo,
+                    hover_color="#cc0000",
+                    text_color=self.blanco,
+                    command=self.controller.event_remove_product,
+                    **self.btn_cfg
+        ).pack(fill="x", pady=5)
+
+        # Sección de pago
+        ctk.CTkLabel(sidebar,
+                    text="Recibe:",
+                    text_color=self.negro,
+                    font=("Segoe UI", 14)
+        ).pack(anchor="w", pady=(20,5))
+        
+        self.recibe_entry = ctk.CTkEntry(sidebar,
+                                        placeholder_text="0",
+                                        fg_color=self.blanco,
+                                        text_color=self.negro,
+                                        **self.entry_cfg)
+        self.recibe_entry.pack(fill="x")
+
+        self.total_label = ctk.CTkLabel(sidebar,
+                                    text="Total Venta: $0",
+                                    text_color=self.negro,
+                                    font=("Segoe UI", 16, "bold"))
+        self.total_label.pack(anchor="w", pady=(20,0))
+
+        # 5) Botones de pago (parte inferior)
+        pay_frame = ctk.CTkFrame(self, fg_color=self.fondo, height=80)
+        pay_frame.pack(side="bottom", fill="x", padx=20, pady=10)
+
+        btn_extra_cfg = {
+            "width": 300,   # Más ancho
+            "height": 40    # Un poco menos alto
+        }
+
+        # Botones de métodos de pago
+        metodos_pago = [
+            ("Pago con Efectivo", self.controller.event_cash_payment),
+            ("Pago con Tarjeta", self.controller.event_card_payment),
+            ("Transferencia", self.controller.event_transfer_payment)
+        ]
+        
+        for texto, comando in metodos_pago:
+            ctk.CTkButton(pay_frame,
+                        text=texto,
+                        fg_color=self.azul,
+                        hover_color="#3333CC",
+                        text_color=self.blanco,
+                        command=comando,
+                        **{**self.btn_cfg, **btn_extra_cfg}
+            ).pack(side="left", padx=10, expand=True)
+
+    # --------------------------------------------------------------------------
+    # Métodos que el controller usa para actualizar la vista
+    # --------------------------------------------------------------------------
     def load_table(self, sold_products):
-        # Limpiar tabla
+        # Limpia la tabla
         for item in self.tree.get_children():
             self.tree.delete(item)
-        
-        # Llenar con todos los ítems
+        # Inserta cada producto
         for sp in sold_products:
-            self.tree.insert("", "end", values=(
-                sp.product.code,
-                sp.product.name,
-                format_price(sp.product.price, decimals=0),
-                sp.quantity
-            ))
+            self.tree.insert(
+                "", "end",
+                values=(
+                    sp.product.code,
+                    sp.product.name,
+                    format_price(sp.product.price, decimals=0),
+                    sp.quantity
+                )
+            )
 
     def set_total(self, total):
-        # Asegúrate de convertir "total" a float antes de formatear
+        # Formatea y muestra el total
         try:
-            total_num = float(total)  # Convertir a número si es cadena
-            formatted_total = format_price(total_num, decimals=0)
-            self.total_label.config(text=f"Total Venta: $ {formatted_total}")
+            total_num = float(total)
+            txt = format_price(total_num, decimals=0)
         except ValueError:
-            # Manejar error si no se puede convertir a número
-            self.total_label.config(text=f"Total Venta: $0")
+            txt = "0"
+        self.total_label.configure(text=f"Total Venta: $ {txt}")
 
     def clear_received_amount(self):
-        self.recibe_entry.delete(0, tk.END)
+        self.recibe_entry.delete(0, "end")
 
     def get_received_amount(self):
         return self.recibe_entry.get().strip()
-    

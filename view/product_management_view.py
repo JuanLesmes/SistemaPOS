@@ -24,24 +24,13 @@ class ProductManagementView(tk.Frame):
     def create_widgets(self):
         # Paleta de colores actualizada
         header_color = "#10a2a7"    # Color de la cabecera
-        fondo = "#9db7b1"           # Fondo general
         boton_principal = "#b57426"  # Botón "Volver a gestión de Inventario"
-        azul       = "#0000FF"
-        verde      = "#28A745"
-        amarillo   = "#FFD700"
-        rojo       = "#FF0000"
-        negro      = "#000000"
         
         # Fuentes
         font_header = ("Segoe UI", 20, "bold")
         font_label  = ("Segoe UI", 15, "bold")
         font_entry  = ("Segoe UI", 15)
         font_button = ("Segoe UI", 15, "bold")
-
-        # Cabecera
-        header_frame = ctk.CTkFrame(self, fg_color=header_color, corner_radius=0)
-        header_frame.place(relx=0, rely=0, relwidth=1, relheight=0.15)
-        ctk.CTkLabel(header_frame, text="Gestión de Productos", fg_color=header_color, text_color="black", font=font_header).pack(expand=True)
 
         # Zona principal
         body_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
@@ -54,7 +43,7 @@ class ProductManagementView(tk.Frame):
 
        # Cabecera
         header_frame = ctk.CTkFrame(self, fg_color=header_color, corner_radius=0)
-        header_frame.place(relx=0, rely=0, relwidth=1, relheight=0.15)
+        header_frame.place(relx=0, rely=0, relwidth=1, relheight=0.10)
         ctk.CTkLabel(
             header_frame,
             text="Gestión de Productos",
@@ -67,7 +56,7 @@ class ProductManagementView(tk.Frame):
         body_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
         body_frame.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
 
-        row_gap = 0.17
+        row_gap = 0.18
         offset_label = 0.05
         offset_entry = 0.10
 

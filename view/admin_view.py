@@ -1,281 +1,278 @@
 # view/admin_view.py
 
-import tkinter as tk
+import customtkinter as ctk
 from tkinter import ttk
+from utils.formatters import format_price
 
-class AdminView(tk.Frame):
+
+class AdminView(ctk.CTkFrame):
     """
-    Vista para el Control de Inventario.
+    Vista para el Control de Inventario, usando CustomTkinter.
     Tiene:
       - Cabecera con título y botón "Volver al Menú".
-      - Sidebar izquierdo con combobox categorías, filtro, campo "nueva categoría", 
-        y botones para filtrar, agregar categoría, gestionar producto.
-      - Tabla de productos (Treeview).
+      - Sidebar izquierdo con combobox categorías, filtro, campo "nueva categoría",
+        y botones redondeados para filtrar, agregar categoría, gestionar producto.
+      - Tabla de productos (ttk.Treeview) con estilo personalizado.
       - Etiqueta con valorización total del inventario.
     """
     def __init__(self, parent, controller):
         super().__init__(parent)
+
+        # Modo de apariencia y fondo principal
+        ctk.set_appearance_mode("light")
+        self.configure(width=800, height=600, fg_color="#9db7b1")
         self.controller = controller
-        
-        # Ajustes principales de la ventana
-        self.config(width=800, height=600, bg="#9db7b1")  # Fondo general actualizado
+
         self.pack_propagate(False)
         self.pack(fill="both", expand=True)
-        
-        # Crear estilos para la tabla
+
+        # Crear estilos para tabla y botones
         self.create_table_styles()
-        
-        # Crear la interfaz (widgets)
+
+        # Crear widgets
         self.create_widgets()
 
-    def create_widgets(self):
-        self.color_turquesa = "#00BFBF"  # Color original (no se usa en cabecera)
-        self.color_naranja  = "#FFA500"   # Color original, se usaba para el botón Volver al Menú
-        self.color_gris     = "#F0F0F0"   # Color original, se reemplaza en fondo por #9db7b1 donde corresponde
-        self.color_blanco   = "#FFFFFF"
-        self.color_azul     = "#0000FF"
-        self.color_verde    = "#28A745"
-        self.color_amarillo = "#FFD700"
-        self.color_borde    = "#D3D3D3"
-        
-        self.font_header  = ("Sans-serif", 20, "bold")
-        self.font_button  = ("Sans-serif", 14, "bold")
-        self.font_label   = ("Sans-serif", 14, "bold")
-        self.font_table   = ("Sans-serif", 14)
-        
-        # ----------------------------------------------------------------
-        # Cabecera
-        # ----------------------------------------------------------------
-        header_height = 60
-        header_frame = tk.Frame(self, bg="#10a2a7", height=header_height)  # Barra superior actualizada
-        header_frame.pack(side="top", fill="x")
-        header_frame.pack_propagate(False)
-        
-        title_label = tk.Label(
-            header_frame,
-            text="Control de Inventario",
-            bg="#10a2a7",  # Se utiliza el nuevo color para la barra superior
-            fg="#000000",
-            font=self.font_header
-        )
-        title_label.pack(side="left", padx=20)
-        
-        back_button = tk.Button(
-            header_frame,
-            text="Volver al Menú",
-            bg="#b57426",
-            fg="#113949",
-            font=self.font_button,
-            bd=0,
-            cursor="hand2",
-            command=self.controller.event_back  # Llamamos al método en el controller
-        )
-        back_button.config(width=12, height=1)
-        back_button.pack(side="right", padx=20, pady=10)
-        
-        # ----------------------------------------------------------------
-        # Cuerpo Principal (sidebar + tabla)
-        # ----------------------------------------------------------------
-        # Se actualiza el fondo general a #9db7b1 en lugar de gris
-        main_frame = tk.Frame(self, bg="#9db7b1")
-        main_frame.pack(side="top", fill="both", expand=True)
-        
-        # Sidebar
-        sidebar_width = int(800 * 0.25)
-        sidebar_frame = tk.Frame(main_frame, bg="#9db7b1", width=sidebar_width)  # Fondo actualizado
-        sidebar_frame.pack(side="left", fill="y", padx=20, pady=20)
-        sidebar_frame.pack_propagate(False)
-        
-        # Etiqueta "Categoría:"
-        category_label = tk.Label(sidebar_frame, text="Categoría:", bg="#9db7b1", font=self.font_label)
-        category_label.pack(anchor="w", pady=5)
-        
-        # Combobox para categorías
-        self.category_combobox = ttk.Combobox(sidebar_frame, values=["Todas"], state="readonly")
-        self.category_combobox.current(0)
-        self.category_combobox.config(width=15)
-        self.category_combobox.pack(pady=5)
-        
-        # Botón Filtrar por Categoría
-        self.filter_button = tk.Button(
-            sidebar_frame,
-            text="Filtrar por Categoría",
-            bg=self.color_azul,
-            fg=self.color_blanco,
-            font=self.font_button,
-            bd=0,
-            cursor="hand2",
-            command=self.controller.event_filter  # Llamamos al método del controller
-        )
-        self.filter_button.config(width=18, height=2)
-        self.filter_button.pack(pady=5)
-        
-        # Campo de búsqueda (para nueva categoría)
-        # Se usará como "nuevo nombre de categoría"
-        self.new_category_entry = tk.Entry(sidebar_frame, width=20, font=("Sans-serif", 12))
-        self.new_category_entry.pack(pady=5)
-        
-        # Botón Agregar Categoría
-        self.add_category_button = tk.Button(
-            sidebar_frame,
-            text="Agregar Categoría",
-            bg=self.color_verde,
-            fg=self.color_blanco,
-            font=self.font_button,
-            bd=0,
-            cursor="hand2",
-            command=self.controller.event_add_category  # controller
-        )
-        self.add_category_button.config(width=18, height=2)
-        self.add_category_button.pack(pady=5)
-        
-        # Botón Gestionar Producto
-        self.manage_product_button = tk.Button(
-            sidebar_frame,
-            text="Gestionar Producto",
-            bg=self.color_amarillo,
-            fg="#000000",
-            font=self.font_button,
-            bd=0,
-            cursor="hand2",
-            command=self.controller.event_manage_products
-        )
-        self.manage_product_button.config(width=18, height=2)
-        self.manage_product_button.pack(pady=5)
-        
-        # Valorización Inventario
-        valuation_label_title = tk.Label(
-            sidebar_frame,
-            text="Valorización Inventario",
-            bg="#9db7b1",
-            font=self.font_label
-        )
-        valuation_label_title.pack(pady=(20, 0))
-        
-        self.valuation_amount_label = tk.Label(
-            sidebar_frame,
-            text="$0",
-            bg="#9db7b1",
-            font=("Sans-serif", 16, "bold")
-        )
-        self.valuation_amount_label.pack(pady=5)
-        
-        # Contenido: Tabla
-        content_frame = tk.Frame(main_frame, bg="#9db7b1")
-        content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
-        
-        products_label = tk.Label(
-            content_frame,
-            text="Productos en Inventario",
-            fg="#000000",
-            bg="#9db7b1",
-            font=("Sans-serif", 16, "bold"),
-            anchor="w"
-        )
-        products_label.pack(fill="x", pady=5)
-        
-        table_frame = tk.Frame(content_frame, bg=self.color_blanco, bd=1, relief="solid")
-        table_frame.pack(fill="both", expand=True)
-        
-        columns = ("code", "name", "stock", "cost", "price", "category", "description")
-        self.inventory_tree = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show="headings",
-            style="Inventory.Treeview"
-        )
-        self.inventory_tree.heading("code", text="Código Producto")
-        self.inventory_tree.heading("name", text="Nombre Producto")
-        self.inventory_tree.heading("stock", text="Stock")
-        self.inventory_tree.heading("cost", text="Costo")
-        self.inventory_tree.heading("price", text="Precio")
-        self.inventory_tree.heading("category", text="Categoría")
-        self.inventory_tree.heading("description", text="Descripción")
-        
-        # Ajuste de columnas
-        self.inventory_tree.column("code", width=100, anchor="w")
-        self.inventory_tree.column("name", width=150, anchor="w")
-        self.inventory_tree.column("stock", width=60, anchor="center")
-        self.inventory_tree.column("cost", width=80, anchor="e")
-        self.inventory_tree.column("price", width=80, anchor="e")
-        self.inventory_tree.column("category", width=120, anchor="w")
-        self.inventory_tree.column("description", width=200, anchor="w")
-        
-        self.inventory_tree.pack(side="left", fill="both", expand=True)
-        
-        # Scrollbar
-        scrollbar_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.inventory_tree.yview)
-        self.inventory_tree.configure(yscroll=scrollbar_y.set)
-        scrollbar_y.pack(side="right", fill="y")
-        
-        # Mensaje por defecto si está vacía
-        self.inventory_tree.insert("", "end", values=("", "Tabla sin contenido", "", "", "", "", ""))
-    
     def create_table_styles(self):
         style = ttk.Style()
         style.theme_use("clam")
-        
+
+        # Estilo para el Treeview
         style.configure(
             "Inventory.Treeview.Heading",
-            background="#10a2a7",
-            foreground="#000000",
+            background="#2C7A7B",
+            foreground="white",
             font=("Sans-serif", 14, "bold")
         )
         style.configure(
             "Inventory.Treeview",
             font=("Sans-serif", 12),
-            rowheight=25,
-            bordercolor="#D3D3D3",
+            rowheight=28,
+            fieldbackground="#F5F5F5",
+            background="#F5F5F5",
+            foreground="black",
+            bordercolor="#CCCCCC",
             borderwidth=1
         )
-        style.map("Inventory.Treeview", background=[("selected", "#00BFBF")])
-    
+        style.map(
+            "Inventory.Treeview",
+            background=[("selected", "#A0E7E5")],
+            foreground=[("selected", "black")]
+        )
+
+        # Estilo para botones redondeados
+        style.configure(
+            "RoundedButton.TButton",
+            font=("Sans-serif", 14, "bold"),
+            padding=6,
+            borderwidth=0
+        )
+        style.map(
+            "RoundedButton.TButton",
+            background=[("!active", "#E0E0E0"), ("active", "#d0d0d0")],
+            foreground=[("!active", "black"), ("active", "black")]
+        )
+
+    def create_widgets(self):
+        # Fuentes
+        font_header = ("Segoe UI", 20, "bold")
+        font_button = ("Segoe UI", 14, "bold")
+        font_label  = ("Segoe UI", 14, "bold")
+        font_table  = ("Segoe UI", 12)
+
+        # ------------------------
+        # Cabecera
+        # ------------------------
+        header_frame = ctk.CTkFrame(self, fg_color="#10a2a7", corner_radius=0)
+        header_frame.pack(side="top", fill="x", ipady=15)
+        header_frame.configure(height=70)
+
+        title_label = ctk.CTkLabel(
+            header_frame,
+            text="Control de Inventario",
+            text_color="black",
+            font=font_header
+        )
+        title_label.pack(side="left", padx=20)
+
+        back_button = ctk.CTkButton(
+            header_frame,
+            text="Volver al Menú",
+            fg_color="#b57426",
+            hover_color="#c7853a",
+            text_color="#113949",
+            font=font_button,
+            corner_radius=10,
+            command=self.controller.event_back
+        )
+        back_button.pack(side="right", padx=20)
+
+        # ------------------------
+        # Cuerpo principal
+        # ------------------------
+        main_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
+        main_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+
+        # Sidebar izquierdo
+        sidebar_frame = ctk.CTkFrame(main_frame, fg_color="#9db7b1", corner_radius=0, width=200)
+        sidebar_frame.pack(side="left", fill="y", padx=(0,10))
+        sidebar_frame.pack_propagate(False)
+
+        boton_style = {
+            "font": ("Sans-serif", 16, "bold"),
+            "corner_radius": 20,
+            "height": 40
+        }
+
+        # Categoría
+        ctk.CTkLabel(sidebar_frame, text="Categoría:", text_color="black", font=font_label).pack(anchor="w", pady=(10,5))
+        self.category_combobox = ttk.Combobox(sidebar_frame, values=["Todas"], state="readonly", width=15)
+        self.category_combobox.current(0)
+        self.category_combobox.pack(pady=(0,10))
+
+        # Botón Filtrar por Categoría (azul, redondeado)
+        filter_button = ctk.CTkButton(
+            sidebar_frame,
+            text="Filtrar por Categoría",
+            fg_color="#0000FF",
+            hover_color="#3333CC",
+            text_color="white",
+            command=self.controller.event_filter,
+            **boton_style
+        )
+        filter_button.pack(fill="x", pady=5)
+
+        # Etiqueta y entrada de Nueva Categoría (justo debajo de Filtrar)
+        ctk.CTkLabel(
+            sidebar_frame,
+            text="Nueva Categoría:",
+            text_color="black",
+            font=font_label
+        ).pack(anchor="w", pady=(10,5))
+        self.new_category_entry = ctk.CTkEntry(
+            sidebar_frame,
+            width=180,
+            font=("Sans-serif", 12),
+            corner_radius=8
+        )
+        self.new_category_entry.pack(fill="x", pady=(0,10))
+
+        # Botón Agregar Categoría (verde, redondeado)
+        add_cat_btn = ctk.CTkButton(
+            sidebar_frame,
+            text="Agregar Categoría",
+            fg_color="#28A745",
+            hover_color="#218838",
+            text_color="white",
+            command=self.controller.event_add_category,
+            **boton_style
+        )
+        add_cat_btn.pack(fill="x", pady=5)
+
+        # Botón Gestionar Producto (amarillo, redondeado)
+        manage_btn = ctk.CTkButton(
+            sidebar_frame,
+            text="Gestionar Producto",
+            fg_color="#FFD700",
+            hover_color="#E6C200",
+            text_color="black",
+            command=self.controller.event_manage_products,
+            **boton_style
+        )
+        manage_btn.pack(fill="x", pady=5)
+
+        # Valorización
+        ctk.CTkLabel(sidebar_frame, text="Valorización Inventario", text_color="black", font=font_label).pack(anchor="w", pady=(20,5))
+        self.valuation_amount_label = ctk.CTkLabel(
+            sidebar_frame,
+            text="$0",
+            text_color="black",
+            font=("Sans-serif", 16, "bold"),
+            justify="center"
+        )
+        self.valuation_amount_label.pack(pady=(0, 10), anchor="center", fill="x")
+
+
+        # ------------------------
+        # Área de contenido (tabla)
+        # ------------------------
+        content_frame = ctk.CTkFrame(main_frame, fg_color="#9db7b1", corner_radius=0)
+        content_frame.pack(side="right", fill="both", expand=True)
+
+        ctk.CTkLabel(
+            content_frame,
+            text="Productos en Inventario",
+            text_color="black",
+            font=("Sans-serif", 16, "bold")
+        ).pack(anchor="w", pady=(10,5))
+
+        table_frame = ctk.CTkFrame(content_frame, fg_color="white", corner_radius=8)
+        table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Treeview
+        columns = ("code","name","stock","cost","price","category","description")
+        self.inventory_tree = ttk.Treeview(table_frame, columns=columns, show="headings", style="Inventory.Treeview")
+        for col, width, anchor, heading in [
+            ("code", 100, "w", "Código"),
+            ("name", 150, "w", "Nombre"),
+            ("stock",  60, "center", "Stock"),
+            ("cost",   80, "e", "Costo"),
+            ("price",  80, "e", "Precio"),
+            ("category",120,"w","Categoría"),
+            ("description",200,"w","Descripción"),
+        ]:
+            self.inventory_tree.heading(col, text=heading)
+            self.inventory_tree.column(col, width=width, anchor=anchor)
+
+        self.inventory_tree.pack(side="left", fill="both", expand=True)
+
+        # Scrollbar vertical
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.inventory_tree.yview)
+        self.inventory_tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+
+        # Mensaje cuando está vacía
+        self.inventory_tree.insert("", "end", values=("", "Tabla sin contenido", "", "", "", "", ""))
+
     # --------------------------------------------------------------------------
     # Métodos que el controller puede usar para actualizar la vista
     # --------------------------------------------------------------------------
     def load_table(self, products):
+        # Limpia rows
         for item in self.inventory_tree.get_children():
             self.inventory_tree.delete(item)
-        
+        # Inserta nuevos
         if not products:
             self.inventory_tree.insert("", "end", values=("", "Tabla sin contenido", "", "", "", "", ""))
         else:
             for p in products:
-                code = p.code
-                name = p.name
-                stock = p.stock
-                cost = f"{p.cost:.2f}"  # Formateado
-                price = f"{p.price:.2f}"  # Formateado
-                category = p.category
-                desc = p.description
-                self.inventory_tree.insert("", "end", values=(code, name, stock, cost, price, category, desc))
-        
+                self.inventory_tree.insert(
+                    "", "end",
+                    values=(
+                        p.code, p.name, p.stock,
+                        f"{p.cost:.2f}", f"{p.price:.2f}",
+                        p.category, p.description
+                    )
+                )
+
     def set_inventory_value(self, value):
         """
-        Actualiza la etiqueta con la valorización total del inventario.
+        Actualiza la etiqueta con la valorización total del inventario,
+        formateada con puntos de miles y coma decimal.
         """
-        self.valuation_amount_label.config(text=f"${value:.2f}")
-    
+        text = format_price(value)
+        self.valuation_amount_label.configure(text=f"${text}")
+
     def set_categories(self, categories):
         if "Todas" not in categories:
             categories = ["Todas"] + categories
         self.category_combobox["values"] = categories
         self.category_combobox.current(0)
 
-    def set_selected_category(self, category):
-        self.category_combobox.set(category)
-
     def get_selected_category(self):
         return self.category_combobox.get()
-    
+
     def get_new_category(self):
-        """
-        Retorna el texto escrito en la Entry para nueva categoría.
-        """
         return self.new_category_entry.get().strip()
-    
+
     def clear_new_category(self):
-        """
-        Limpia la Entry luego de agregar la categoría.
-        """
         self.new_category_entry.delete(0, "end")
