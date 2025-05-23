@@ -44,21 +44,26 @@ class SalesReportViewController:
         self.view.set_totals(rec_total, cash, card, transfer)
 
     def aggregate_sold_products(self, receipts):
+    
         aggregated = {}
         for r in receipts:
+            # formatea la hora con minuto exacto
+            if hasattr(r, "time") and isinstance(r.time, datetime.time):
+                minute_str = r.time.strftime("%H:%M")
+            else:
+                minute_str = "00:00"
             for sp in r.sold_products:
-                code = sp.get_code()
-                if code in aggregated:
-                    agg_sp = aggregated[code]
+                key = (sp.get_code(), minute_str)
+                if key in aggregated:
+                    agg_sp = aggregated[key]
                     agg_sp.quantity += sp.quantity
                     agg_sp.calculate_total_partial()
                 else:
-                    # constructor de SoldProduct: (id, product, quantity)
                     new_sp = SoldProduct(0, sp.product, sp.quantity)
-                    # Copiamos fecha y hora desde el recibo
-                    new_sp.date = r.date    # aquí va el atributo date de Receipt
-                    new_sp.time = r.time    # y el atributo time de Receipt
-                    aggregated[code] = new_sp
+                    new_sp.date = r.date
+                    new_sp.time = r.time
+                    new_sp.time_str = minute_str 
+                    aggregated[key] = new_sp
         return list(aggregated.values())
 
     
@@ -87,7 +92,7 @@ class SalesReportViewController:
         return total, cash, card, transfer
     
     def generate_report(self):
-        sold_products = self.view.get_displayed_products()  # Este método lo definiremos en la vista
+        sold_products = self.view.get_displayed_products()
         if not sold_products:
             messagebox.showinfo("Sin datos", "No hay productos vendidos para exportar.")
             return
@@ -97,31 +102,34 @@ class SalesReportViewController:
         ws.title = "Reporte de Ventas"
 
         # Encabezados
-        headers = ["Nombre", "Cantidad", "Precio unitario", "Subtotal", "Fecha", "Hora"]
+        headers = ["Fecha", "Hora", "Nombre", "Cantidad", "Precio unitario", "Subtotal"]
         ws.append(headers)
 
-        # Datos
+        # Datos: cada sp es una venta individual
         for sp in sold_products:
             fecha = sp.date.strftime("%Y-%m-%d") if hasattr(sp.date, "strftime") else str(sp.date)
-            hora = sp.time.strftime("%H:%M") if hasattr(sp.time, "strftime") else str(sp.time)
+            hora  = getattr(sp, "time_str", "")   # ahora minuto exacto
             ws.append([
+                fecha,
+                hora,
                 sp.product.name,
                 sp.quantity,
                 sp.product.price,
-                sp.get_total_partial(),
-                sp.date.strftime("%Y-%m-%d")
+                sp.get_total_partial()
             ])
 
-        # Selección de ruta
+        # 5) Pregunta dónde guardar
         filename = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
-            filetypes=[("Excel files", "*.xlsx")],
+            filetypes=[("Excel", "*.xlsx")],
             initialfile=f"reporte_ventas_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         )
+        if not filename:
+            return
 
-        if filename:
-            try:
-                wb.save(filename)
-                messagebox.showinfo("Éxito", f"Reporte guardado en:\n{filename}")
-            except Exception as e:
-                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+        # 6) Guarda y avisa
+        try:
+            wb.save(filename)
+            messagebox.showinfo("Éxito", f"Reporte guardado en:\n{filename}")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar:\n{e}")

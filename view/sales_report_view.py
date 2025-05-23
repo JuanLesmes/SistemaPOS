@@ -93,7 +93,7 @@ class SalesReportView(ctk.CTkFrame):
         scrollbar.pack(side="right", fill="y", padx=(0,5), pady=5)
 
         # Treeview con columnas extra
-        columns = ("datetime", "code", "name", "qty", "total")
+        columns = ("datetime", "hour", "code", "name", "qty", "total")
         self.sales_tree = ttk.Treeview(
             table_frame,
             columns=columns,
@@ -104,10 +104,11 @@ class SalesReportView(ctk.CTkFrame):
         scrollbar.configure(command=self.sales_tree.yview)
 
         for col, w, anchor, title in [
-            ("datetime", 140, "center", "Fecha / Hora"),
-            ("code",      80,  "w",      "Código"),
-            ("name",     160,  "w",      "Nombre"),
-            ("qty",       80,  "center", "Cant."),
+            ("datetime", 80, "center", "Fecha"),
+            ("hour",      40,  "center", "Hora"),
+            ("code",      60,  "w",      "Código"),
+            ("name",     180,  "w",      "Nombre"),
+            ("qty",       40,  "center", "Cantidad"),
             ("total",    100,  "e",      "Total"),
         ]:
             self.sales_tree.heading(col, text=title)
@@ -186,7 +187,6 @@ class SalesReportView(ctk.CTkFrame):
     # --------------------------------------------------------------------------
     def load_table(self, sold_products):
         self.filtered_sold_products = sold_products
-        # Limpia la tabla
         for iid in self.sales_tree.get_children():
             self.sales_tree.delete(iid)
 
@@ -195,22 +195,18 @@ class SalesReportView(ctk.CTkFrame):
             return
 
         for sp in sold_products:
-            fecha_hora = ""
-        if hasattr(sp, "date") and sp.date is not None:
-            # suponiendo sp.date sea un datetime.date o string
             fecha = sp.date.strftime("%Y-%m-%d") if isinstance(sp.date, datetime.date) else str(sp.date)
-            hora  = sp.time.strftime("%H:%M")      if isinstance(sp.time, datetime.time) else str(sp.time)
-            fecha_hora = f"{fecha} {hora}"
             self.sales_tree.insert(
                 "", "end",
                 values=(
-                    fecha_hora,
+                    fecha,          
+                    sp.time_str,   
                     sp.get_code(),
                     sp.product.name,
                     sp.quantity,
                     f"${format_price(sp.get_total_partial(), decimals=0)}"
                 )
-             )
+            )
 
 
     def get_start_date(self):
