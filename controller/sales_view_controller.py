@@ -20,7 +20,7 @@ class SalesViewController:
         self.view = SalesView(self.parent_frame, self)
         
         # 2° Vinculación de eventos a self.view
-        self.view.bind("<Button-1>", self._handle_mouse_click)
+        self.view.bind("<KeyRelease>", self.handle_barcode_input)
         
         # Configuración del logger
         global logger
@@ -284,3 +284,7 @@ class SalesViewController:
                 
         except ValueError as e:
             messagebox.showerror("Error", str(e))
+
+    def deactivate_barcode_reader(self):
+        self.view.unbind("<KeyRelease>")
+        logger.info("Lector DESACTIVADO")

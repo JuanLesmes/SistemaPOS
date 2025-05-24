@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import DictCursor
 import datetime
+import json
 from model.product import Product
 from model.receipt import Receipt
 from model.sold_product import SoldProduct
@@ -78,6 +79,17 @@ class DBConnection:
                 quantity INTEGER
             )
             """
+            ,
+            """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                action VARCHAR(50) NOT NULL,
+                code TEXT,
+                details TEXT,
+                "user" TEXT
+            )
+            """
         ]
         
         for query in queries:
@@ -86,17 +98,43 @@ class DBConnection:
             except Exception as e:
                 print(f"Error creando tablas: {e}")
 
+    def log_event(self, action, code=None, details=None, user=None):
+        self.cursor.execute("""
+            INSERT INTO audit_logs (action, code, details, "user")
+            VALUES (%s, %s, %s, %s)
+        """, (action, code, details, user))
+
     # CATEGORÍAS
     def get_category_id(self, cat_name):
         self.cursor.execute("SELECT idCategory FROM categories WHERE category_name = %s", (cat_name,))
         row = self.cursor.fetchone()
         return row['idcategory'] if row else None
+    
 
     def delete_category(self, category_name):
         try:
-            self.cursor.execute("DELETE FROM categories WHERE category_name = %s", (category_name,))
-            self.conn.commit()  # ¡Commit esencial!
-            return True
+            # 1) Ejecuta el DELETE
+            self.cursor.execute(
+                "DELETE FROM categories WHERE category_name = %s",
+                (category_name,)
+            )
+            # 2) Comprueba si realmente se eliminó algo
+            success = self.cursor.rowcount > 0
+
+            # 3) Commit de la transacción
+            self.conn.commit()
+
+            # 4) Si se borró, registra el evento
+            if success:
+                self.log_event(
+                    action="delete_category",
+                    code=None,
+                    details=json.dumps({"category_name": category_name})
+                )
+
+            # 5) Devuelve el resultado
+            return success
+
         except Exception as e:
             print(f"Error eliminando categoría: {e}")
             self.conn.rollback()
@@ -145,13 +183,31 @@ class DBConnection:
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (product.code, product.name, product.cost, 
               product.price, product.stock, cat_id, product.description))
+        
+        details = {
+            "name": product.name,
+            "cost": product.cost,
+            "price": product.price,
+            "stock": product.stock,
+            "category_id": cat_id,
+            "description": product.description
+        }
+        self.log_event(
+            action="add_product",
+            code=product.code,
+            details=json.dumps(details),
+            user=None
+        )
 
     def update_product(self, name, cost, price, stock, category, description, code):
         cat_id = self.get_category_id(category)
         if not cat_id:
             self.add_category(category)
             cat_id = self.get_category_id(category)
-            
+        
+        # Retrieve previous product data before updating
+        prev = self.get_product(code)
+        
         self.cursor.execute("""
             UPDATE products 
             SET name = %s, cost = %s, price = %s, 
@@ -159,15 +215,48 @@ class DBConnection:
             WHERE code = %s
         """, (name, cost, price, stock, cat_id, description, code))
 
+        details = {
+            "before": {
+                "name": prev.name if prev else None, "cost": prev.cost if prev else None,
+                "price": prev.price if prev else None, "stock": prev.stock if prev else None,
+                "category": prev.category if prev else None, "description": prev.description if prev else None
+            },
+            "after": {
+                "name": name, "cost": cost,
+                "price": price, "stock": stock,
+                "category": category, "description": description
+            }
+        }
+        self.log_event("modify_product", code=code, details=json.dumps(details))
+
     def update_stock(self, code, quantity):
+        prev_stock = self.get_product(code).stock
         self.cursor.execute("""
             UPDATE products 
-            SET stock = stock + %s 
-            WHERE code = %s
+               SET stock = stock + %s 
+             WHERE code = %s
         """, (quantity, code))
+        new_stock = prev_stock + quantity
+        self.log_event(
+            "update_stock",
+            code=code,
+            details=f"{prev_stock} → {new_stock}"
+        )
 
     def delete_product(self, code):
+        prod = self.get_product(code)
         self.cursor.execute("DELETE FROM products WHERE code = %s", (code,))
+        self.log_event(
+            "delete_product",
+            code=code,
+            details=json.dumps({
+                "name": prod.name,
+                "cost": prod.cost,
+                "price": prod.price,
+                "stock": prod.stock,
+                "category": prod.category
+            })
+        )
 
     def add_receipt(self, receipt):
         self.cursor.execute("""
@@ -257,6 +346,15 @@ class DBConnection:
         except Exception as e:
             print(f"Error en búsqueda: {str(e)}")
             return []
+        
+    def get_logs_by_date(self, date_str):
+        self.cursor.execute("""
+            SELECT timestamp, action, code, details, "user"
+              FROM audit_logs
+             WHERE DATE(timestamp) = %s
+             ORDER BY timestamp
+        """, (date_str,))
+        return self.cursor.fetchall()
 
     def close_connection(self):
         self.cursor.close()

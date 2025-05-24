@@ -2,6 +2,9 @@ import tkinter as tk
 from controller.voucher_view_controller import VoucherViewController
 from controller.product_management_view_controller import ProductManagementViewController
 from model.db_connection import DBConnection
+from controller.login_view_controller import LoginViewController
+import tkinter.messagebox as msgbox
+from tkinter import simpledialog
 
 class MainController:
     def __init__(self, root):
@@ -34,10 +37,12 @@ class MainController:
         from controller.sales_view_controller import SalesViewController
         from controller.sales_report_view_controller import SalesReportViewController
         from view.login_view import LoginView
+        from controller.auditlog_view_controller import AuditLogViewController
 
         # Frame de Login
         self.frame_login = tk.Frame(self.root)
-        self.login_view = LoginView(self.frame_login, self)
+        self.login_controller = LoginViewController(self.frame_login, self, self.db)
+        self.login_view = self.login_controller.view
 
         # Frame de Administración
         self.frame_admin = tk.Frame(self.root)
@@ -59,6 +64,10 @@ class MainController:
         self.frame_sales_report = tk.Frame(self.root)
         self.report_controller = SalesReportViewController(self.frame_sales_report, self, self.db)
 
+        # Frame de AuditLog
+        self.frame_auditlog = tk.Frame(self.root)
+        self.auditlog_controller = AuditLogViewController(self.frame_auditlog, self, self.db)
+
     def on_close(self):
         """Cierra la aplicación correctamente."""
         self.db.close_connection()
@@ -79,7 +88,6 @@ class MainController:
         self.product_mgmt_controller.view.set_categories(self.db.get_categories())
 
     def show_sales_view(self):
-        """Muestra el frame de ventas existente."""
         self.hide_all_frames()
         self.frame_sales.pack(fill="both", expand=True)
         self.sales_controller.initialize()
@@ -89,8 +97,6 @@ class MainController:
         self._show_frame(self.frame_sales_report    )
 
     def show_voucher_view(self, receipt, change_due):
-        """Muestra el voucher como ventana emergente (Toplevel)."""
-        # No afecta a los frames principales
         VoucherViewController(self.root, self, receipt, change_due)
 
     def _show_frame(self, frame):
@@ -99,10 +105,11 @@ class MainController:
         frame.pack(fill="both", expand=True)
 
     def hide_all_frames(self):
-        """Oculta todos los frames principales."""
         for widget in self.root.winfo_children():
             if isinstance(widget, tk.Frame):
                 widget.pack_forget()
+        
+        self.sales_controller.deactivate_barcode_reader() 
         
     def get_current_voucher_controller(self):
         return self.current_voucher_controller
@@ -112,3 +119,17 @@ class MainController:
         self.admin_controller.view.set_categories(["Todas"] + updated_cats)  # <-- admin_controller
         if hasattr(self, "product_mgmt_controller"):
             self.product_mgmt_controller.view.set_categories(updated_cats)
+
+    def show_auditlog_view(self):
+        self._show_frame(self.frame_auditlog)
+
+    def event_verify_auditlog_password(self):
+        password = simpledialog.askstring("Autenticación", "Ingrese la contraseña para Admin:", show="*")
+        
+        if password is None:
+            return
+        
+        if password == "1000721154":
+            self.show_auditlog_view()
+        else:
+            msgbox.showerror("Acceso denegado", "Contraseña incorrecta")

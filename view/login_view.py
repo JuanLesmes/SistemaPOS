@@ -61,7 +61,7 @@ class LoginView(ctk.CTkFrame):
             fg_color=marron_cafe,
             hover_color="#935d1e",
             text_color="white",
-            command=self.controller.show_sales_view,
+            command=self.controller.event_go_sales,
             **btn_style
         ).pack(pady=10)
 
@@ -72,7 +72,7 @@ class LoginView(ctk.CTkFrame):
             fg_color=marron_cafe,
             hover_color="#935d1e",
             text_color="white",
-            command=self.controller.show_admin_view,
+            command=self.controller.event_go_admin,
             **btn_style
         ).pack(pady=10)
 
@@ -83,7 +83,18 @@ class LoginView(ctk.CTkFrame):
             fg_color=marron_cafe,
             hover_color="#935d1e",
             text_color="white",
-            command=self.controller.show_sales_report_view,
+            command=self.controller.event_go_report,
+            **btn_style
+        ).pack(pady=10)
+
+        # Botón de Admin (AuditLog)
+        ctk.CTkButton(
+            container,
+            text="Admin",
+            fg_color=marron_cafe,
+            hover_color="#935d1e",
+            text_color="white",
+            command=self.controller.event_verify_auditlog_password,
             **btn_style
         ).pack(pady=10)
 
@@ -119,9 +130,8 @@ class LoginView(ctk.CTkFrame):
                 text_color=azul_turquesa
             ).pack()
 
-    # 👇 Aquí ya está fuera del método create_widgets
     def exit_app(self):
         try:
-            self.controller.root.destroy()
+            self.controller.main_controller.root.destroy()
         except AttributeError:
             pass

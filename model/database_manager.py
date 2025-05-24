@@ -7,6 +7,7 @@ class DatabaseManager:
         self._initialize_tables()
 
     def _initialize_tables(self):
+        # ——— Tabla de productos ———
         self.cur.execute("""
             CREATE TABLE IF NOT EXISTS productos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,6 +16,19 @@ class DatabaseManager:
                 cantidad INTEGER
             );
         """)
+
+        # ——— Tabla de auditoría ———
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                action TEXT NOT NULL,       -- 'add_product', 'update_stock', etc.
+                code TEXT,                  -- código de producto o categoría
+                details TEXT,               -- JSON o descripción de cambios
+                user TEXT                   -- opcional: quién hizo el cambio
+            );
+        """)
+
         self.conn.commit()
 
     def execute(self, query, params=None):
