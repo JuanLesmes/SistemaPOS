@@ -37,10 +37,18 @@ class SalesView(ctk.CTkFrame):
         self._create_widgets()
 
         # Eventos
-        root = self.winfo_toplevel()
-        root.bind_all("<KeyRelease>", self.controller.handle_barcode_input)
-        self.recibe_entry.focus_set()
+        self.tree.bind("<Button-1>", self._on_click)  
+        self.bind("<Button-1>", self._on_click)  
         self.recibe_entry.bind("<Return>", lambda e: self._on_enter_recibe())
+        self.recibe_entry.bind("<FocusIn>", lambda e: controller._pause_barcode_reader())
+        self.recibe_entry.bind("<FocusOut>", lambda e: controller._resume_barcode_reader())
+
+    
+    def _on_click(self, event):
+        """Restaura el foco al hacer clic en la vista"""
+        widget = self.winfo_containing(event.x_root, event.y_root)
+        if widget != self.recibe_entry:
+            self.controller.force_focus_restore()
 
     def _on_enter_recibe(self):
         self.controller.process_payment()

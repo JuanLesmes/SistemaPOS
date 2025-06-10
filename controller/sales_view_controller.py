@@ -30,12 +30,17 @@ class SalesViewController:
         
         # 3° Inicialización de la vista
         self.view.focus_set()  
-        self.view.bind("<KeyRelease>", self.handle_barcode_input)  
         self.sold_products = []
         self.initialize()
         
         self.view.recibe_entry.bind("<FocusIn>", self._pause_barcode_reader)
         self.view.recibe_entry.bind("<FocusOut>", self._resume_barcode_reader)
+
+        self.barcode_reader_active = True
+        self.view.after(100, self.force_focus_restore)
+
+        root = self.view.winfo_toplevel()
+
 
     def initialize(self):
         self.sold_products.clear()  # Vacía la lista existente
@@ -51,29 +56,37 @@ class SalesViewController:
         self.view.master.after(100, self.activate_barcode_reader)
 
     def activate_barcode_reader(self):
-        """Fuerza el foco y reactiva los bindings"""
+        self.buffer_codigo = ""
+        root = self.view.winfo_toplevel()
+        root.bind_all("<KeyRelease>", self.handle_barcode_input)
+        self.view.focus_force()
+
+    def _pause_barcode_reader(self, event=None):
+        """Pausa la lectura de códigos de barras"""
+        self.barcode_reader_active = False
+        root = self.view.winfo_toplevel()
+        root.unbind_all("<KeyRelease>")
+        logger.info("Lector PAUSADO")
+
+    def _resume_barcode_reader(self, event=None):
+        self.barcode_reader_active = True
+        self.buffer_codigo = ""  # Limpiar buffer al reactivar
+        root = self.view.winfo_toplevel()
+        root.bind_all("<KeyRelease>", self.handle_barcode_input)
         self.view.focus_set()
-        self.view.bind("<KeyRelease>", self.handle_barcode_input)
-        logger.info("Lector ACTIVADO")
-
-    def _pause_barcode_reader(self, event):
-        """Pausa la lectura de códigos de barras cuando el campo Recibe tiene foco"""
-        self.view.unbind("<KeyRelease>")
-        logger.info("Lector PAUSADO (foco en Recibe)")
-
-    def _resume_barcode_reader(self, event):
-        """Solo reanuda lecturas si el foco NO está en Recibe"""
-        if self.view.focus_get() != self.view.recibe_entry:
-            self.view.bind("<KeyRelease>", self.handle_barcode_input)
-            self.view.focus_set()
-            logger.info("Lector REANUDADO")
+        logger.info("Lector REANUDADO")
 
     def handle_barcode_input(self, event):
-        if self.view.recibe_entry.focus_get() == self.view.recibe_entry:
+        """Maneja entrada de código de barras SOLO cuando es apropiado"""
+        # Solo procesar si el lector está activo
+        if not self.barcode_reader_active:
             return
+            
+        # Solo procesar dígitos y Enter
         if event.keysym == "Return":
+            # Procesar código completo
             code = self.buffer_codigo.strip()
-            self.buffer_codigo = ""  # Reiniciar buffer
+            self.buffer_codigo = ""
             
             if not code:
                 return
@@ -83,10 +96,8 @@ class SalesViewController:
                 self.add_product_to_sale(product, 1)
             else:
                 messagebox.showwarning("Error", "Producto no encontrado o sin stock")
-        else:
-            # Asegurar que solo se capturan caracteres válidos (dígitos)
-            if event.char.isdigit():
-                self.buffer_codigo += event.char
+        elif event.char and event.char.isdigit():
+            self.buffer_codigo += event.char
 
     def add_product_to_sale(self, product, quantity=1):
         """
@@ -119,15 +130,12 @@ class SalesViewController:
             del self.sold_products[selected_index]
             self.refresh_sales_table()
 
-            self.view.after(100, self.force_focus_restore)
+            self.force_focus_restore()
 
     def force_focus_restore(self):
-        """Restaura el foco SIEMPRE, pero pausa si está en Recibe."""
-        if self.view.focus_get() == self.view.recibe_entry:
-            self._pause_barcode_reader(None)  # Pausar si está en Recibe
-        else:
-            self.view.focus_set()
-            self.activate_barcode_reader()  # Reactivar bindings
+        self.view.focus_set()
+        self.view.bind("<KeyRelease>", self.handle_barcode_input)
+        logger.info("Foco restaurado")
 
 
     def event_cash_payment(self):
@@ -287,4 +295,5 @@ class SalesViewController:
 
     def deactivate_barcode_reader(self):
         self.view.unbind("<KeyRelease>")
-        logger.info("Lector DESACTIVADO")
+        root = self.view.winfo_toplevel()
+        root.unbind_all("<KeyRelease>")

@@ -185,12 +185,15 @@ class DBConnection:
               product.price, product.stock, cat_id, product.description))
         
         details = {
-            "name": product.name,
-            "cost": product.cost,
-            "price": product.price,
-            "stock": product.stock,
-            "category_id": cat_id,
-            "description": product.description
+            "before": {}, 
+            "after": {
+                "name": product.name,
+                "cost": product.cost,
+                "price": product.price,
+                "stock": product.stock,
+                "category": product.category,
+                "description": product.description
+            }
         }
         self.log_event(
             action="add_product",
@@ -246,18 +249,24 @@ class DBConnection:
     def delete_product(self, code):
         prod = self.get_product(code)
         self.cursor.execute("DELETE FROM products WHERE code = %s", (code,))
-        self.log_event(
-            "delete_product",
-            code=code,
-            details=json.dumps({
+        details = {
+            "before": {
                 "name": prod.name,
                 "cost": prod.cost,
                 "price": prod.price,
                 "stock": prod.stock,
-                "category": prod.category
-            })
+                "category": prod.category,
+                "description": prod.description
+            },
+            "after": {}  # Nada después
+        }
+        self.log_event(
+            "delete_product",
+            code=code,
+            details=json.dumps(details),
+            user=None
         )
-
+        
     def add_receipt(self, receipt):
         self.cursor.execute("""
         INSERT INTO receipts (total, date, time, payment_method)
@@ -350,9 +359,10 @@ class DBConnection:
     def get_logs_by_date(self, date_str):
         self.cursor.execute("""
             SELECT timestamp, action, code, details, "user"
-              FROM audit_logs
-             WHERE DATE(timestamp) = %s
-             ORDER BY timestamp
+            FROM audit_logs
+            WHERE DATE(timestamp) = %s
+            AND action != 'update_stock'
+            ORDER BY timestamp
         """, (date_str,))
         return self.cursor.fetchall()
 

@@ -27,34 +27,29 @@ class ProductManagementViewController:
     def event_go_back_to_inventory(self):
         self.main_controller.show_admin_view()
 
-    def event_search_scan(self):
+    def event_search_scan(self, silent=False):
         term = self.view.get_search_term()
         if not term:
-            messagebox.showwarning("Alerta", "Ingrese un criterio de búsqueda.")
+            if not silent:
+                messagebox.showwarning("Alerta", "Ingrese un criterio de búsqueda.")
             return
 
         normalized = term.strip().lower()
 
-        # Búsqueda exacta
         exact = self.db.get_product(term)
         if exact:
             self.fill_form_with_product(exact)
-            # limpiamos panel
             self.view.show_search_results([], lambda p: None)
             return
 
-        # Búsqueda parcial
         matched = self.db.search_products(normalized)
-
-        # Si no hay coincidencias
         if not matched:
-            messagebox.showinfo("Info", f"No se encontraron resultados para: '{term}'.")
+            if not silent:
+                messagebox.showinfo("Info", f"No se encontraron resultados para: '{term}'.")
             self.view.clear_search()
             self.view.show_search_results([], lambda p: None)
             return
 
-        # Hay al menos uno: mostrar todos en el panel
-        # Al hacer clic en uno, se rellena el formulario
         self.view.show_search_results(matched, self.fill_form_with_product)
         self.view.clear_search()
 
@@ -229,3 +224,9 @@ class ProductManagementViewController:
         if product.category in cats:
             idx = cats.index(product.category)
             self.view.cmb_category.current(idx)
+
+    def event_fill_code_from_scan(self):
+        term = self.view.get_search_term()
+        if term:
+            self.view.set_code(term.strip())
+            self.view.clear_search()
