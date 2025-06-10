@@ -273,13 +273,19 @@ class DBConnection:
         VALUES (%s, %s, %s, %s)
         RETURNING idReceipt
         """, (
-        receipt.total,
-        receipt.date,
-        receipt.time,
-        receipt.payment_method
+            receipt.total,
+            receipt.date,
+            receipt.time,
+            receipt.payment_method
         ))
-    
-        receipt_id = self.cursor.fetchone()['idreceipt']
+
+        result = self.cursor.fetchone()
+        print("Resultado de fetchone():", result)
+
+        if result is None:
+            raise ValueError("No se pudo obtener el idReceipt después del INSERT.")
+
+        receipt_id = result[0]
 
         for sp in receipt.sold_products:
             self.cursor.execute("""
@@ -287,7 +293,7 @@ class DBConnection:
                 VALUES (%s, %s, %s)
             """, (receipt_id, sp.product.code, sp.quantity))
             self.update_stock(sp.product.code, -sp.quantity)
-    
+
         self.conn.commit()
         return receipt_id
     

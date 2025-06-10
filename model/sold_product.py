@@ -1,8 +1,9 @@
 class SoldProduct:
-    def __init__(self, receipt_id, product, quantity):
+    def __init__(self, receipt_id, product, quantity, payment_method=None):
         self.receipt_id = receipt_id
         self.product = product
         self.quantity = quantity
+        self.payment_method = payment_method
         self.total_partial = 0.0
         self.calculate_total_partial()
 

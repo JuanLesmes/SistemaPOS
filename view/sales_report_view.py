@@ -92,8 +92,8 @@ class SalesReportView(ctk.CTkFrame):
         scrollbar = ctk.CTkScrollbar(table_frame)
         scrollbar.pack(side="right", fill="y", padx=(0,5), pady=5)
 
-        # Treeview con columnas extra
-        columns = ("datetime", "hour", "code", "name", "qty", "total")
+        # Treeview con columnas
+        columns = ("datetime", "hour", "code", "name", "qty", "total", "payment")
         self.sales_tree = ttk.Treeview(
             table_frame,
             columns=columns,
@@ -110,6 +110,7 @@ class SalesReportView(ctk.CTkFrame):
             ("name",     180,  "w",      "Nombre"),
             ("qty",       40,  "center", "Cantidad"),
             ("total",    100,  "e",      "Total"),
+            ("payment",  100, "center", "Pago"),
         ]:
             self.sales_tree.heading(col, text=title)
             self.sales_tree.column(col, width=w, anchor=anchor)
@@ -204,7 +205,8 @@ class SalesReportView(ctk.CTkFrame):
                     sp.get_code(),
                     sp.product.name,
                     sp.quantity,
-                    f"${format_price(sp.get_total_partial(), decimals=0)}"
+                    f"${format_price(sp.get_total_partial(), decimals=0)}",
+                    sp.payment_method
                 )
             )
 

@@ -44,7 +44,6 @@ class SalesReportViewController:
         self.view.set_totals(rec_total, cash, card, transfer)
 
     def aggregate_sold_products(self, receipts):
-    
         aggregated = {}
         for r in receipts:
             # formatea la hora con minuto exacto
@@ -53,7 +52,7 @@ class SalesReportViewController:
             else:
                 minute_str = "00:00"
             for sp in r.sold_products:
-                key = (sp.get_code(), minute_str)
+                key = (sp.get_code(), minute_str, r.payment_method)
                 if key in aggregated:
                     agg_sp = aggregated[key]
                     agg_sp.quantity += sp.quantity
@@ -62,7 +61,8 @@ class SalesReportViewController:
                     new_sp = SoldProduct(0, sp.product, sp.quantity)
                     new_sp.date = r.date
                     new_sp.time = r.time
-                    new_sp.time_str = minute_str 
+                    new_sp.time_str = minute_str
+                    new_sp.payment_method = r.payment_method
                     aggregated[key] = new_sp
         return list(aggregated.values())
 

@@ -218,7 +218,10 @@ class SalesViewController:
         total=total
         )
 
-        receipt.sold_products = self.sold_products.copy()  # Copia, no referencia
+        for sp in self.sold_products:
+            sp.payment_method = payment_method  
+
+        receipt.sold_products = self.sold_products.copy()
 
         receipt.id = self.db.add_receipt(receipt)
         grouped_items = {}
