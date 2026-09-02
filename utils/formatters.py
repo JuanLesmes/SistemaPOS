@@ -21,6 +21,12 @@ def format_price(value: Decimal | int | float | str | None, decimals: int = 0) -
     return text.replace(",", "\0").replace(".", ",").replace("\0", ".")
 
 
+def format_money_input(value: Decimal) -> str:
+    """Formato para campos de entrada: sin decimales cuando el valor es entero."""
+    decimals = 0 if value == value.to_integral_value() else 2
+    return format_price(value, decimals)
+
+
 def parse_money(text: str) -> Decimal:
     """Convierte texto escrito por el usuario en Decimal. Lanza ValueError si no es válido."""
     cleaned = text.strip().replace("$", "").replace(" ", "")

@@ -1,7 +1,7 @@
 """Prueba de humo de la interfaz completa con una base de datos simulada.
 
-Crea la ventana principal oculta, recorre todas las pantallas y hace una venta
-de principio a fin. Sirve para atrapar errores de construcción de widgets y de
+Crea la ventana principal oculta, recorre todas las pantallas y hace ventas de
+principio a fin. Sirve para atrapar errores de construcción de widgets y de
 cableado entre vistas y controladores sin necesitar PostgreSQL ni impresora.
 Se salta si no hay entorno gráfico disponible.
 """
@@ -51,7 +51,18 @@ class FakeDB:
         return True
 
     def get_products(self, category: str | None = None) -> list[Product]:
-        return [p for p in self.products.values() if p.active and (category is None or p.category == category)]
+        return sorted(
+            (p for p in self.products.values() if p.active and (category is None or p.category == category)),
+            key=lambda p: p.name.lower(),
+        )
+
+    def get_best_sellers(self, days: int = 30, limit: int = 60) -> list[Product]:
+        sold: dict[str, int] = {}
+        for receipt in self.receipts:
+            for sp in receipt.sold_products:
+                sold[sp.code] = sold.get(sp.code, 0) + sp.quantity
+        ranked = sorted(sold, key=lambda code: -sold[code])
+        return [self.products[code] for code in ranked if self.products[code].active][:limit]
 
     def get_product(self, code: str, include_inactive: bool = False) -> Product | None:
         product = self.products.get(code)
@@ -60,7 +71,7 @@ class FakeDB:
         return product
 
     def search_products(self, term: str) -> list[Product]:
-        return [p for p in self.get_products() if term.lower() in p.name.lower()]
+        return [p for p in self.get_products() if term.lower() in p.name.lower() or term.lower() in p.code.lower()]
 
     def add_product(self, product: Product) -> None:
         if product.code in self.products and self.products[product.code].active:
@@ -129,88 +140,144 @@ def root():
         window.destroy()
 
 
+def assert_visible(controller, view) -> None:
+    """La vista debe estar colocada en su marco y el marco en la ventana; si no, la pantalla sale en blanco."""
+    view.winfo_toplevel().update()
+    assert view.winfo_manager() == "pack", f"{type(view).__name__} no está colocada en su marco"
+    assert view.master.winfo_manager() == "pack", f"El marco de {type(view).__name__} no está en la ventana"
+    shown = [f for f in controller._frames if f.winfo_manager() == "pack"]
+    assert shown == [view.master], "Solo debe haber una pantalla visible a la vez"
+
+
+def close_toplevels(root) -> None:
+    for window in root.winfo_children():
+        if isinstance(window, tk.Toplevel):
+            window.destroy()
+
+
 def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     from controller.main_controller import MainController
 
     db = FakeDB()
     db.add_product(Product("A1", "Gaseosa", Decimal(2000), Decimal(3000), 5, "Bebidas"))
+    db.add_product(Product("B2", "Pan", Decimal(300), Decimal(500), 0, "General"))
     controller = MainController(root, settings, db)
     root.update()
+    assert_visible(controller, controller.menu_controller.view)
 
-    # Ventas: escaneo, cobro en efectivo con cambio y ventana de recibo.
+    # ---------------------------------------------------------------- ventas
     controller.show_sales_view()
     root.update()
-    controller.sales_controller.on_barcode("A1")
-    controller.sales_controller.on_barcode("A1")
-    controller.sales_controller.on_barcode("ZZZ")
+    sales = controller.sales_controller
+    sales_view = sales.view
+    assert_visible(controller, sales_view)
+    assert len(sales_view._cards) == 2, "el catálogo debe mostrar todos los productos"
+
+    sales.event_select_category("Bebidas")
+    assert [card.product.code for card in sales_view._cards] == ["A1"]
+    sales.event_product_selected(sales_view._cards[0].product)
+    sales.on_barcode("A1")
+    sales.on_barcode("ZZZ")
     root.update()
-    assert [sp.quantity for sp in controller.sales_controller.lines] == [2]
+    assert [sp.quantity for sp in sales.lines] == [2]
     assert dialogs[-1][0] == "showwarning"
 
-    print_jobs: list[Receipt] = []
-    controller.sales_controller._print_in_background = lambda receipt, *_args: print_jobs.append(receipt)
+    sales.event_increase()
+    sales.event_decrease()
+    assert [sp.quantity for sp in sales.lines] == [2]
 
-    # Primera venta sin activar "Imprimir recibo": no debe imprimir.
-    sales_view = controller.sales_controller.view
+    # Cobro: billetes, teclado, cambio en vivo.
+    sales.event_bill(5000)
+    sales.event_bill(2000)
+    assert sales_view.get_received_amount() == "7.000"
+    assert sales_view.change_label.cget("text").startswith("Cambio")
+    sales.event_keypad("←")
+    assert sales_view.get_received_amount() == "700"
+    assert sales_view.change_label.cget("text").startswith("Faltan")
+    sales.event_exact()
+    assert sales_view.get_received_amount() == "6.000"
+    sales.event_bill(10000)
+
+    print_jobs: list[Receipt] = []
+    sales._print_in_background = lambda receipt, *_args: print_jobs.append(receipt)
+
+    # Primera venta sin activar "Imprimir recibo": no imprime, abre el recibo con el cambio.
     assert sales_view.wants_receipt() is False
-    sales_view.recibe_entry.insert(0, "10.000")
-    controller.sales_controller.event_cash_payment()
+    sales.event_cash_payment()
     root.update()
     assert len(db.receipts) == 1
     assert db.receipts[0].total == Decimal(6000)
     assert db.products["A1"].stock == 3
-    assert controller.sales_controller.lines == []
+    assert sales.lines == []
     assert print_jobs == []
     voucher = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)]
     assert voucher, "Debe abrirse la ventana del recibo"
-    voucher[0].destroy()
+    close_toplevels(root)
 
     # Segunda venta con el interruptor activado: imprime y el interruptor vuelve a apagarse.
-    controller.sales_controller.on_barcode("A1")
+    sales.on_barcode("A1")
     sales_view.print_var.set(True)
-    controller.sales_controller.event_card_payment()
+    sales.event_card_payment()
     root.update()
     assert len(db.receipts) == 2
     assert [r.id for r in print_jobs] == [2]
     assert sales_view.wants_receipt() is False
-    for window in root.winfo_children():
-        if isinstance(window, tk.Toplevel):
-            window.destroy()
+    close_toplevels(root)
 
-    # Inventario y gestión de productos.
+    sales.event_select_category("__mas_vendidos__")
+    assert [card.product.code for card in sales_view._cards] == ["A1"]
+
+    # ---------------------------------------------------------------- inventario
     controller.show_admin_view()
     root.update()
-    assert controller.admin_controller.view.tree.get_children()
-    controller.admin_controller.view.new_category_entry.insert(0, "Aseo")
-    controller.admin_controller.event_add_category()
+    admin = controller.admin_controller
+    assert_visible(controller, admin.view)
+    assert len(admin.view.tree.get_children()) == 2
+    admin.view.search_entry.insert(0, "gas")
+    admin.event_filter_changed()
+    assert len(admin.view.tree.get_children()) == 1
+    admin.view.new_category_entry.insert(0, "Aseo")
+    admin.event_add_category()
     assert "Aseo" in db.categories
+    assert admin.view.stat_cards["out"].value_label.cget("text") == "1"
 
+    # ---------------------------------------------------------------- productos
     controller.show_product_management_view()
     root.update()
-    view = controller.product_controller.view
+    products = controller.product_controller
+    view = products.view
+    assert_visible(controller, view)
     view.entry_search.insert(0, "gas")
-    controller.product_controller.event_search()
-    assert view._result_labels
-    controller.product_controller.fill_form(db.get_product("A1"))
+    products.event_search()
+    assert len(view.results_tree.get_children()) == 1
+    products.fill_form(db.get_product("A1"))
     assert view.get_code() == "A1"
     assert view.get_price() == "3.000"
     view.entry_stock.delete(0, "end")
     view.entry_stock.insert(0, "4")
-    controller.product_controller.event_add_stock()
+    products.event_add_stock()
     assert db.products["A1"].stock == 6  # 5 iniciales - 2 - 1 vendidas + 4 agregadas
+    products.event_new()
+    assert view.get_code() == ""
 
-    # Reporte del día y auditoría.
+    # ---------------------------------------------------------------- reporte
     controller.show_sales_report_view()
     root.update()
-    controller.report_controller.event_search()
-    assert len(controller.report_controller.rows) == 2
-    assert controller.report_controller.totals.cash == Decimal(6000)
-    assert controller.report_controller.totals.card == Decimal(3000)
+    report = controller.report_controller
+    assert_visible(controller, report.view)
+    report.event_quick_range("today")
+    assert len(report.rows) == 2
+    assert report.totals.cash == Decimal(6000)
+    assert report.totals.card == Decimal(3000)
+    assert report.totals.receipt_count == 2
 
+    # ---------------------------------------------------------------- auditoría
     controller.show_auditlog_view()
     root.update()
+    assert_visible(controller, controller.auditlog_controller.view)
     assert controller.auditlog_controller.view.tree.get_children()
-
-    controller.show_menu()
+    controller.auditlog_controller.event_back()
     root.update()
+    assert_visible(controller, controller.menu_controller.view)
+
     assert not any(kind == "showerror" for kind, _ in dialogs), dialogs

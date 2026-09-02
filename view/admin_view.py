@@ -1,166 +1,165 @@
-"""Control de inventario: listado de productos, filtro por categoría y valorización."""
+"""Inventario: indicadores, filtros y tabla de productos activos."""
 
 from __future__ import annotations
 
-from decimal import Decimal
-from tkinter import ttk
-
 import customtkinter as ctk
 
+from model.inventory import InventoryStats, stock_tag
 from model.product import Product
 from utils.formatters import format_price
 from view import theme
+from view.widgets import Card, HeaderBar, StatCard, button, clear_entry, fill_table, make_table, section_label
 
 ALL_CATEGORIES = "Todas"
 
 COLUMNS = (
-    ("code", "Código", 110, "w"),
-    ("name", "Nombre", 200, "w"),
-    ("stock", "Stock", 70, "center"),
-    ("cost", "Costo", 100, "e"),
-    ("price", "Precio", 100, "e"),
-    ("category", "Categoría", 130, "w"),
-    ("description", "Descripción", 240, "w"),
+    ("code", "Código", 130, "w", False),
+    ("name", "Nombre", 260, "w"),
+    ("category", "Categoría", 160, "w"),
+    ("stock", "Stock", 80, "center", False),
+    ("cost", "Costo", 100, "e", False),
+    ("price", "Precio", 100, "e", False),
+    ("description", "Descripción", 300, "w"),
 )
-EMPTY_ROW = ("", "Sin productos para mostrar", "", "", "", "", "")
 
 
 class AdminView(ctk.CTkFrame):
     def __init__(self, parent, controller) -> None:
-        super().__init__(parent, fg_color=theme.BACKGROUND)
+        super().__init__(parent, fg_color=theme.BACKGROUND, corner_radius=0)
         self.controller = controller
-        self.pack_propagate(False)
         self.pack(fill="both", expand=True)
-        self._create_widgets()
+        self._build()
 
-    def _create_widgets(self) -> None:
-        button_style = {"font": theme.font(15, bold=True), "corner_radius": 20, "height": 40}
-        font_label = theme.font(14, bold=True)
+    def _build(self) -> None:
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
-        header = ctk.CTkFrame(self, fg_color=theme.HEADER, corner_radius=0)
-        header.pack(side="top", fill="x", ipady=15)
-        ctk.CTkLabel(header, text="Control de inventario", text_color=theme.BLACK, font=theme.font(20, bold=True)).pack(
-            side="left", padx=20
+        self.header = HeaderBar(self, "Inventario", "Productos activos y valor de las existencias")
+        self.header.grid(row=0, column=0, sticky="ew")
+        self.header.add_action("Gestionar productos", self.controller.event_manage_products, kind="accent")
+        self.header.add_action("Volver al menú", self.controller.event_back)
+
+        stats = ctk.CTkFrame(self, fg_color="transparent")
+        stats.grid(row=1, column=0, sticky="ew", padx=16, pady=(14, 0))
+        cards = (
+            ("count", "Productos activos", theme.PRIMARY),
+            ("value_price", "Valor a precio de venta", theme.PRIMARY),
+            ("value_cost", "Valor a costo", theme.MUTED),
+            ("low", "Con pocas existencias", theme.WARNING),
+            ("out", "Agotados", theme.DANGER),
         )
-        ctk.CTkButton(
-            header,
-            text="Volver al menú",
-            fg_color=theme.ACCENT,
-            hover_color=theme.ACCENT_HOVER,
-            text_color=theme.BLACK,
-            font=theme.font(14, bold=True),
-            corner_radius=10,
-            command=self.controller.event_back,
-        ).pack(side="right", padx=20)
+        self.stat_cards: dict[str, StatCard] = {}
+        for index, (key, label, accent) in enumerate(cards):
+            stats.grid_columnconfigure(index, weight=1, uniform="stats")
+            card = StatCard(stats, label, "0", accent=accent)
+            card.grid(row=0, column=index, sticky="ew", padx=(0 if index == 0 else 10, 0))
+            self.stat_cards[key] = card
 
-        main = ctk.CTkFrame(self, fg_color=theme.BACKGROUND, corner_radius=0)
-        main.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+        toolbar = Card(self, padding=12)
+        toolbar.grid(row=2, column=0, sticky="ew", padx=16, pady=12)
+        body = toolbar.body
+        body.grid_columnconfigure(1, weight=1)
 
-        sidebar = ctk.CTkFrame(main, fg_color=theme.BACKGROUND, corner_radius=0, width=220)
-        sidebar.pack(side="left", fill="y", padx=(0, 10))
-        sidebar.pack_propagate(False)
-
-        ctk.CTkLabel(sidebar, text="Categoría:", text_color=theme.BLACK, font=font_label).pack(anchor="w", pady=(10, 5))
-        self.category_combobox = ttk.Combobox(sidebar, values=[ALL_CATEGORIES], state="readonly", width=18)
-        self.category_combobox.current(0)
-        self.category_combobox.pack(pady=(0, 10))
-        ctk.CTkButton(
-            sidebar,
-            text="Filtrar",
-            fg_color=theme.PRIMARY,
-            hover_color=theme.PRIMARY_HOVER,
-            text_color=theme.WHITE,
-            command=self.controller.event_filter,
-            **button_style,
-        ).pack(fill="x", pady=5)
-
-        ctk.CTkLabel(sidebar, text="Nueva categoría:", text_color=theme.BLACK, font=font_label).pack(
-            anchor="w", pady=(10, 5)
+        section_label(body, "Buscar").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.search_entry = ctk.CTkEntry(
+            body,
+            placeholder_text="Nombre o código",
+            placeholder_text_color=theme.MUTED,
+            height=40,
+            font=theme.font(14),
+            fg_color=theme.SURFACE_ALT,
+            border_color=theme.BORDER,
+            text_color=theme.TEXT,
         )
-        self.new_category_entry = ctk.CTkEntry(sidebar, font=theme.font(12), corner_radius=8)
-        self.new_category_entry.pack(fill="x", pady=(0, 10))
+        self.search_entry.grid(row=0, column=1, sticky="ew")
+        self.search_entry.bind("<KeyRelease>", lambda _event: self.controller.event_filter_changed())
+
+        section_label(body, "Categoría").grid(row=0, column=2, sticky="w", padx=(18, 8))
+        self.category_box = ctk.CTkComboBox(
+            body,
+            values=[ALL_CATEGORIES],
+            state="readonly",
+            width=220,
+            height=40,
+            font=theme.font(14),
+            dropdown_font=theme.font(13),
+            fg_color=theme.SURFACE_ALT,
+            border_color=theme.BORDER,
+            button_color=theme.PRIMARY,
+            button_hover_color=theme.PRIMARY_HOVER,
+            text_color=theme.TEXT,
+            command=lambda _value: self.controller.event_filter_changed(),
+        )
+        self.category_box.set(ALL_CATEGORIES)
+        self.category_box.grid(row=0, column=3, sticky="w")
+
+        section_label(body, "Nueva categoría").grid(row=0, column=4, sticky="w", padx=(24, 8))
+        self.new_category_entry = ctk.CTkEntry(
+            body,
+            placeholder_text="Nombre",
+            placeholder_text_color=theme.MUTED,
+            width=200,
+            height=40,
+            font=theme.font(14),
+            fg_color=theme.SURFACE_ALT,
+            border_color=theme.BORDER,
+            text_color=theme.TEXT,
+        )
+        self.new_category_entry.grid(row=0, column=5, sticky="w")
         self.new_category_entry.bind("<Return>", lambda _event: self.controller.event_add_category())
-        ctk.CTkButton(
-            sidebar,
-            text="Agregar categoría",
-            fg_color=theme.SUCCESS,
-            hover_color=theme.SUCCESS_HOVER,
-            text_color=theme.WHITE,
-            command=self.controller.event_add_category,
-            **button_style,
-        ).pack(fill="x", pady=5)
-        ctk.CTkButton(
-            sidebar,
-            text="Gestionar productos",
-            fg_color=theme.WARNING,
-            hover_color=theme.WARNING_HOVER,
-            text_color=theme.BLACK,
-            command=self.controller.event_manage_products,
-            **button_style,
-        ).pack(fill="x", pady=5)
+        button(
+            body, "Agregar", self.controller.event_add_category, kind="success", size="sm", height=40, width=110
+        ).grid(row=0, column=6, sticky="w", padx=(8, 0))
 
-        ctk.CTkLabel(sidebar, text="Valor del inventario", text_color=theme.BLACK, font=font_label).pack(
-            anchor="w", pady=(20, 5)
-        )
-        self.valuation_label = ctk.CTkLabel(sidebar, text="$0", text_color=theme.BLACK, font=theme.font(16, bold=True))
-        self.valuation_label.pack(pady=(0, 10), anchor="center", fill="x")
-
-        content = ctk.CTkFrame(main, fg_color=theme.BACKGROUND, corner_radius=0)
-        content.pack(side="right", fill="both", expand=True)
-        ctk.CTkLabel(
-            content, text="Productos en inventario", text_color=theme.BLACK, font=theme.font(16, bold=True)
-        ).pack(anchor="w", pady=(10, 5))
-        table_frame = ctk.CTkFrame(content, fg_color=theme.WHITE, corner_radius=8)
-        table_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        self.tree = ttk.Treeview(
-            table_frame,
-            columns=[c[0] for c in COLUMNS],
-            show="headings",
-            style=theme.table_style("Inventory"),
-        )
-        for key, title, width, anchor in COLUMNS:
-            self.tree.heading(key, text=title)
-            self.tree.column(key, width=width, anchor=anchor)
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
+        table_card = Card(self, padding=10)
+        table_card.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 16))
+        table_box = ctk.CTkFrame(table_card.body, fg_color="transparent")
+        table_box.pack(fill="both", expand=True)
+        self.tree = make_table(table_box, COLUMNS, "Inventory")
+        self.tree.bind("<Double-1>", lambda _event: self.controller.event_open_selected())
 
     # ------------------------------------------------------------------ API para el controlador
     def load_table(self, products: list[Product]) -> None:
-        theme.clear_table(self.tree)
-        if not products:
-            self.tree.insert("", "end", values=EMPTY_ROW)
-            return
-        for p in products:
-            self.tree.insert(
-                "",
-                "end",
-                values=(
-                    p.code,
-                    p.name,
-                    p.stock,
-                    format_price(p.cost),
-                    format_price(p.price),
-                    p.category,
-                    p.description,
-                ),
-            )
+        self._products = list(products)
+        fill_table(
+            self.tree,
+            (
+                (p.code, p.name, p.category, p.stock, format_price(p.cost), format_price(p.price), p.description)
+                for p in products
+            ),
+            extra_tags=lambda row: stock_tag(int(row[3])),
+            empty_message="No hay productos que coincidan",
+        )
 
-    def set_inventory_value(self, value: Decimal) -> None:
-        self.valuation_label.configure(text=f"${format_price(value)}")
+    def selected_product(self) -> Product | None:
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        index = self.tree.index(selection[0])
+        return self._products[index] if index < len(self._products) else None
+
+    def set_stats(self, stats: InventoryStats) -> None:
+        self.stat_cards["count"].set_value(str(stats.product_count))
+        self.stat_cards["value_price"].set_value(f"${format_price(stats.value_at_price)}")
+        self.stat_cards["value_cost"].set_value(f"${format_price(stats.value_at_cost)}")
+        self.stat_cards["low"].set_value(str(stats.low_stock_count))
+        self.stat_cards["out"].set_value(str(stats.out_of_stock_count))
+        self.header.set_subtitle(f"{stats.product_count} productos activos")
 
     def set_categories(self, categories: list[str]) -> None:
         values = [ALL_CATEGORIES] + [c for c in categories if c != ALL_CATEGORIES]
-        current = self.category_combobox.get()
-        self.category_combobox.configure(values=values)
-        self.category_combobox.current(values.index(current) if current in values else 0)
+        current = self.category_box.get()
+        self.category_box.configure(values=values)
+        self.category_box.set(current if current in values else ALL_CATEGORIES)
 
     def get_selected_category(self) -> str:
-        return self.category_combobox.get()
+        return self.category_box.get()
+
+    def get_search_term(self) -> str:
+        return self.search_entry.get().strip()
 
     def get_new_category(self) -> str:
         return self.new_category_entry.get().strip()
 
     def clear_new_category(self) -> None:
-        self.new_category_entry.delete(0, "end")
+        clear_entry(self.new_category_entry)

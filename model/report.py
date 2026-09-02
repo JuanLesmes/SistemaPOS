@@ -30,6 +30,7 @@ class SalesTotals:
     cash: Decimal
     card: Decimal
     transfer: Decimal
+    receipt_count: int = 0
 
 
 def rows_from_receipts(receipts: list[Receipt]) -> list[SalesReportRow]:
@@ -64,4 +65,5 @@ def totals_from_receipts(receipts: list[Receipt]) -> SalesTotals:
         cash=by_method.get(PAYMENT_CASH, Decimal(0)),
         card=by_method.get(PAYMENT_CARD, Decimal(0)),
         transfer=by_method.get(PAYMENT_TRANSFER, Decimal(0)),
+        receipt_count=len(receipts),
     )

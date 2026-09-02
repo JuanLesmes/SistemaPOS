@@ -1,111 +1,107 @@
-"""Registro de auditoría: lista de eventos del día y detalle antes/después."""
+"""Registro de auditoría: eventos del día y detalle antes/después."""
 
 from __future__ import annotations
 
 import datetime as dt
-import tkinter as tk
-from tkinter import ttk
 
 import customtkinter as ctk
 from tkcalendar import DateEntry
 
 from model.audit_log import AuditEntry
 from view import theme
+from view.widgets import Card, HeaderBar, button, fill_table, make_table, section_label
 
 SUMMARY_COLUMNS = (
-    ("timestamp", "Fecha y hora", 150),
-    ("action", "Acción", 150),
-    ("code", "Código", 120),
+    ("timestamp", "Fecha y hora", 160, "w", False),
+    ("action", "Acción", 190, "w"),
+    ("code", "Código", 140, "w", False),
+)
+DETAIL_COLUMNS = (
+    ("field", "Campo", 130, "w", False),
+    ("before", "Antes", 240, "w"),
+    ("after", "Después", 240, "w"),
 )
 
+ACTION_LABELS = {
+    "add_product": "Producto creado",
+    "modify_product": "Producto modificado",
+    "deactivate_product": "Producto eliminado",
+    "delete_product": "Producto eliminado",
+    "reactivate_product": "Producto reactivado",
+    "update_stock": "Existencias ajustadas",
+    "add_category": "Categoría creada",
+    "delete_category": "Categoría eliminada",
+}
 
-class AuditLogView(tk.Frame):
+FIELD_LABELS = {
+    "name": "Nombre",
+    "cost": "Costo",
+    "price": "Precio",
+    "stock": "Existencias",
+    "category": "Categoría",
+    "description": "Descripción",
+    "category_name": "Categoría",
+    "detalle": "Detalle",
+}
+
+
+class AuditLogView(ctk.CTkFrame):
     def __init__(self, parent, controller) -> None:
-        super().__init__(parent, bg=theme.BACKGROUND)
+        super().__init__(parent, fg_color=theme.BACKGROUND, corner_radius=0)
         self.controller = controller
         self._entries: list[AuditEntry] = []
-        self._create_widgets()
+        self.pack(fill="both", expand=True)
+        self._build()
 
-    def _create_widgets(self) -> None:
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=2)
+    def _build(self) -> None:
+        self.grid_columnconfigure(0, weight=2, uniform="panels")
+        self.grid_columnconfigure(1, weight=3, uniform="panels")
+        self.grid_rowconfigure(2, weight=1)
 
-        filters = ctk.CTkFrame(self, fg_color=theme.HEADER, corner_radius=0)
-        filters.grid(row=0, column=0, columnspan=2, sticky="ew")
-        filters.grid_columnconfigure(2, weight=1)
-        ctk.CTkLabel(filters, text="Auditoría", text_color=theme.BLACK, font=theme.font(20, bold=True)).grid(
-            row=0, column=0, padx=20, pady=12
-        )
+        header = HeaderBar(self, "Auditoría", "Cambios del catálogo registrados por día")
+        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header.add_action("Volver al menú", self.controller.event_back)
+
+        filters = Card(self, padding=12)
+        filters.grid(row=1, column=0, columnspan=2, sticky="ew", padx=16, pady=(14, 12))
+        body = filters.body
+        section_label(body, "Fecha").pack(side="left", padx=(0, 8))
         self.date_picker = DateEntry(
-            filters, date_pattern="yyyy-mm-dd", background="white", foreground="black", borderwidth=1, locale="es_CO"
+            body,
+            width=12,
+            font=theme.font(13),
+            background=theme.PRIMARY,
+            foreground=theme.ON_DARK,
+            headersbackground=theme.SURFACE_ALT,
+            normalbackground=theme.SURFACE,
+            weekendbackground=theme.SURFACE,
+            selectbackground=theme.PRIMARY,
+            borderwidth=1,
+            date_pattern="yyyy-mm-dd",
+            locale="es_CO",
         )
-        self.date_picker.grid(row=0, column=1, padx=(0, 8), pady=12)
-        ctk.CTkButton(
-            filters,
-            text="Cargar",
-            width=110,
-            fg_color=theme.PRIMARY,
-            hover_color=theme.PRIMARY_HOVER,
-            text_color=theme.WHITE,
-            font=theme.font(13, bold=True),
-            corner_radius=8,
-            command=self._on_load_click,
-        ).grid(row=0, column=2, sticky="w", pady=12)
-        ctk.CTkButton(
-            filters,
-            text="Volver al menú",
-            fg_color=theme.ACCENT,
-            hover_color=theme.ACCENT_HOVER,
-            text_color=theme.BLACK,
-            font=theme.font(13, bold=True),
-            corner_radius=8,
-            command=self.controller.event_back,
-        ).grid(row=0, column=3, sticky="e", padx=20, pady=12)
+        self.date_picker.pack(side="left")
+        button(body, "Cargar", self._on_load_click, kind="primary", size="sm", height=40, width=110).pack(
+            side="left", padx=(12, 0)
+        )
+        button(body, "Hoy", lambda: self.controller.load_today(), kind="ghost", size="sm", height=40, width=80).pack(
+            side="left", padx=(6, 0)
+        )
+        self.count_label = ctk.CTkLabel(body, text="", font=theme.font(12), text_color=theme.MUTED)
+        self.count_label.pack(side="right")
 
-        left = ctk.CTkFrame(self, fg_color=theme.WHITE, corner_radius=8)
-        left.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=10)
-        left.grid_rowconfigure(0, weight=1)
-        left.grid_columnconfigure(0, weight=1)
-        self.tree = ttk.Treeview(
-            left,
-            columns=[c[0] for c in SUMMARY_COLUMNS],
-            show="headings",
-            selectmode="browse",
-            style=theme.table_style("Audit", row_height=24),
-        )
-        for key, title, width in SUMMARY_COLUMNS:
-            self.tree.heading(key, text=title)
-            self.tree.column(key, width=width, stretch=True)
-        summary_scroll = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=summary_scroll.set)
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=6)
-        summary_scroll.grid(row=0, column=1, sticky="ns", pady=6)
+        events = Card(self, "Eventos", padding=10)
+        events.grid(row=2, column=0, sticky="nsew", padx=(16, 6), pady=(0, 16))
+        events_box = ctk.CTkFrame(events.body, fg_color="transparent")
+        events_box.pack(fill="both", expand=True)
+        self.tree = make_table(events_box, SUMMARY_COLUMNS, "Audit")
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
-        right = ctk.CTkFrame(self, fg_color=theme.WHITE, corner_radius=8)
-        right.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        right.grid_rowconfigure(1, weight=1)
-        right.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(
-            right, text="Cambios (antes y después)", font=theme.font(13, bold=True), text_color=theme.BLACK
-        ).grid(row=0, column=0, sticky="w", padx=8, pady=(8, 4))
-        self.details = ttk.Treeview(
-            right,
-            columns=("field", "before", "after"),
-            show="headings",
-            style=theme.table_style("AuditDetail", row_height=24),
-        )
-        self.details.heading("field", text="Campo")
-        self.details.heading("before", text="Antes")
-        self.details.heading("after", text="Después")
-        self.details.column("field", width=120, stretch=False)
-        self.details.column("before", width=220, stretch=True)
-        self.details.column("after", width=220, stretch=True)
-        detail_scroll = ttk.Scrollbar(right, orient="vertical", command=self.details.yview)
-        self.details.configure(yscrollcommand=detail_scroll.set)
-        self.details.grid(row=1, column=0, sticky="nsew", padx=(6, 0), pady=(0, 6))
-        detail_scroll.grid(row=1, column=1, sticky="ns", pady=(0, 6))
+        details = Card(self, "Cambios (antes y después)", padding=10)
+        details.grid(row=2, column=1, sticky="nsew", padx=(6, 16), pady=(0, 16))
+        details_box = ctk.CTkFrame(details.body, fg_color="transparent")
+        details_box.pack(fill="both", expand=True)
+        self.details = make_table(details_box, DETAIL_COLUMNS, "AuditDetail")
 
     # ------------------------------------------------------------------ API para el controlador
     def set_date(self, day: dt.date) -> None:
@@ -113,17 +109,22 @@ class AuditLogView(tk.Frame):
 
     def show_logs(self, entries: list[AuditEntry]) -> None:
         self._entries = list(entries)
-        theme.clear_table(self.tree)
+        fill_table(
+            self.tree,
+            (
+                (
+                    entry.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    ACTION_LABELS.get(entry.action, entry.action),
+                    entry.code or "",
+                )
+                for entry in self._entries
+            ),
+            empty_message="No hay eventos en esta fecha",
+        )
+        self.count_label.configure(text=f"{len(self._entries)} eventos")
         theme.clear_table(self.details)
-        for index, entry in enumerate(self._entries):
-            self.tree.insert(
-                "",
-                "end",
-                iid=str(index),
-                values=(entry.timestamp.strftime("%Y-%m-%d %H:%M:%S"), entry.action, entry.code or ""),
-            )
         children = self.tree.get_children()
-        if children:
+        if self._entries and children:
             self.tree.selection_set(children[0])
             self._show_details(0)
 
@@ -134,10 +135,17 @@ class AuditLogView(tk.Frame):
     def _on_select(self, _event) -> None:
         selection = self.tree.selection()
         if selection:
-            self._show_details(int(selection[0]))
+            index = self.tree.index(selection[0])
+            if index < len(self._entries):
+                self._show_details(index)
 
     def _show_details(self, index: int) -> None:
-        theme.clear_table(self.details)
         before, after = self._entries[index].changes()
-        for key in sorted(set(before) | set(after)):
-            self.details.insert("", "end", values=(key, str(before.get(key, "")), str(after.get(key, ""))))
+        fill_table(
+            self.details,
+            (
+                (FIELD_LABELS.get(key, key), str(before.get(key, "")), str(after.get(key, "")))
+                for key in sorted(set(before) | set(after))
+            ),
+            empty_message="Sin detalle",
+        )

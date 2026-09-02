@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import logging
 import tkinter as tk
+from collections.abc import Callable
 from decimal import Decimal
 from tkinter import messagebox, simpledialog
 
@@ -16,6 +17,7 @@ from controller.sales_report_view_controller import SalesReportViewController
 from controller.sales_view_controller import SalesViewController
 from controller.voucher_view_controller import VoucherViewController
 from model.db_connection import DBConnection
+from model.product import Product
 from model.receipt import Receipt
 from utils.config import Settings
 
@@ -74,8 +76,10 @@ class MainController:
         self.admin_controller.refresh()
         self._show(self.frame_admin)
 
-    def show_product_management_view(self) -> None:
+    def show_product_management_view(self, product: Product | None = None) -> None:
         self.product_controller.refresh_categories()
+        if product is not None:
+            self.product_controller.open_product(product)
         self._show(self.frame_products)
 
     def show_sales_view(self) -> None:
@@ -89,8 +93,14 @@ class MainController:
         self.auditlog_controller.load_today()
         self._show(self.frame_auditlog)
 
-    def show_voucher_view(self, receipt: Receipt, received: Decimal | None, change: Decimal) -> None:
-        VoucherViewController(self.root, self.settings.business, receipt, received, change)
+    def show_voucher_view(
+        self,
+        receipt: Receipt,
+        received: Decimal | None,
+        change: Decimal,
+        on_print: Callable[[], None] | None = None,
+    ) -> None:
+        VoucherViewController(self.root, self.settings.business, receipt, received, change, on_print)
 
     def request_auditlog_access(self) -> None:
         expected = self.settings.admin_password

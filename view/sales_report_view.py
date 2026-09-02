@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-from tkinter import ttk
 
 import customtkinter as ctk
 from tkcalendar import DateEntry
@@ -11,146 +10,108 @@ from tkcalendar import DateEntry
 from model.report import SalesReportRow, SalesTotals
 from utils.formatters import format_price
 from view import theme
+from view.widgets import Card, HeaderBar, StatCard, button, fill_table, make_table, section_label
 
 COLUMNS = (
-    ("recibo", "Recibo", 70, "center"),
-    ("fecha", "Fecha", 90, "center"),
-    ("hora", "Hora", 60, "center"),
-    ("codigo", "Código", 110, "w"),
-    ("nombre", "Producto", 240, "w"),
-    ("cantidad", "Cantidad", 70, "center"),
-    ("total", "Total", 110, "e"),
-    ("pago", "Pago", 110, "center"),
+    ("recibo", "Recibo", 80, "center", False),
+    ("fecha", "Fecha", 100, "center", False),
+    ("hora", "Hora", 70, "center", False),
+    ("codigo", "Código", 130, "w", False),
+    ("nombre", "Producto", 300, "w"),
+    ("cantidad", "Cantidad", 80, "center", False),
+    ("precio", "Precio", 100, "e", False),
+    ("total", "Total", 110, "e", False),
+    ("pago", "Pago", 120, "center", False),
 )
-EMPTY_ROW = ("", "", "", "", "Sin datos para mostrar", "", "", "")
+
+QUICK_RANGES = (("Hoy", "today"), ("Ayer", "yesterday"), ("Esta semana", "week"), ("Este mes", "month"))
 
 
 class SalesReportView(ctk.CTkFrame):
     def __init__(self, parent, controller) -> None:
-        super().__init__(parent, fg_color=theme.BACKGROUND)
+        super().__init__(parent, fg_color=theme.BACKGROUND, corner_radius=0)
         self.controller = controller
         self.pack(fill="both", expand=True)
-        self.pack_propagate(False)
-        self._create_widgets()
+        self._build()
 
-    def _create_widgets(self) -> None:
-        button_style = {"corner_radius": 12, "height": 40, "width": 160, "font": theme.font(14, bold=True)}
+    def _build(self) -> None:
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
-        header = ctk.CTkFrame(self, fg_color=theme.HEADER, corner_radius=0, height=60)
-        header.pack(side="top", fill="x")
-        header.pack_propagate(False)
-        ctk.CTkLabel(header, text="Reporte de ventas", text_color=theme.WHITE, font=theme.font(20, bold=True)).place(
-            relx=0.5, rely=0.5, anchor="center"
+        header = HeaderBar(self, "Reporte de ventas", "Ventas por rango de fechas y totales por método de pago")
+        header.grid(row=0, column=0, sticky="ew")
+        header.add_action("Exportar a Excel", self.controller.event_export, kind="accent")
+        header.add_action("Volver al menú", self.controller.event_back)
+
+        filters = Card(self, padding=12)
+        filters.grid(row=1, column=0, sticky="ew", padx=16, pady=(14, 0))
+        body = filters.body
+        section_label(body, "Desde").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.start_date = _date_entry(body)
+        self.start_date.grid(row=0, column=1, sticky="w")
+        section_label(body, "Hasta").grid(row=0, column=2, sticky="w", padx=(16, 8))
+        self.end_date = _date_entry(body)
+        self.end_date.grid(row=0, column=3, sticky="w")
+        button(body, "Consultar", self.controller.event_search, kind="primary", size="sm", height=40, width=130).grid(
+            row=0, column=4, padx=(16, 0)
         )
+        quick = ctk.CTkFrame(body, fg_color="transparent")
+        quick.grid(row=0, column=5, sticky="e", padx=(24, 0))
+        body.grid_columnconfigure(5, weight=1)
+        for label, key in QUICK_RANGES:
+            button(
+                quick, label, lambda k=key: self.controller.event_quick_range(k), kind="ghost", size="sm", height=40
+            ).pack(side="left", padx=(6, 0))
 
-        main = ctk.CTkFrame(self, fg_color=theme.BACKGROUND, corner_radius=0)
-        main.pack(side="top", fill="both", expand=True, padx=20, pady=10)
-
-        table_frame = ctk.CTkFrame(
-            main, fg_color=theme.WHITE, corner_radius=8, border_width=1, border_color=theme.BORDER
+        stats = ctk.CTkFrame(self, fg_color="transparent")
+        stats.grid(row=2, column=0, sticky="ew", padx=16, pady=12)
+        cards = (
+            ("total", "Total recaudado", theme.PRIMARY),
+            ("cash", "Efectivo", theme.ACCENT),
+            ("card", "Tarjeta", theme.HEADER),
+            ("transfer", "Transferencia", theme.SUCCESS),
+            ("count", "Recibos", theme.MUTED),
         )
-        table_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
-        scrollbar = ctk.CTkScrollbar(table_frame)
-        scrollbar.pack(side="right", fill="y", padx=(0, 5), pady=5)
-        self.tree = ttk.Treeview(
-            table_frame,
-            columns=[c[0] for c in COLUMNS],
-            show="headings",
-            style=theme.table_style("SalesReport", row_height=24),
-            yscrollcommand=scrollbar.set,
-        )
-        scrollbar.configure(command=self.tree.yview)
-        for key, title, width, anchor in COLUMNS:
-            self.tree.heading(key, text=title)
-            self.tree.column(key, width=width, anchor=anchor)
-        self.tree.pack(fill="both", expand=True, padx=5, pady=5)
+        self.stat_cards: dict[str, StatCard] = {}
+        for index, (key, label, accent) in enumerate(cards):
+            stats.grid_columnconfigure(index, weight=1, uniform="stats")
+            card = StatCard(stats, label, "$0" if key != "count" else "0", accent=accent)
+            card.grid(row=0, column=index, sticky="ew", padx=(0 if index == 0 else 10, 0))
+            self.stat_cards[key] = card
 
-        sidebar = ctk.CTkFrame(main, fg_color=theme.BACKGROUND, corner_radius=0, width=260)
-        sidebar.pack(side="right", fill="y")
-        sidebar.pack_propagate(False)
-
-        ctk.CTkLabel(sidebar, text="Fecha inicio", text_color=theme.BLACK, font=theme.font(14, bold=True)).pack(
-            anchor="w", pady=(10, 2), padx=10
-        )
-        self.start_date = _date_entry(sidebar)
-        self.start_date.pack(anchor="w", padx=10)
-        ctk.CTkLabel(sidebar, text="Fecha fin", text_color=theme.BLACK, font=theme.font(14, bold=True)).pack(
-            anchor="w", pady=(10, 2), padx=10
-        )
-        self.end_date = _date_entry(sidebar)
-        self.end_date.pack(anchor="w", padx=10)
-
-        ctk.CTkButton(
-            sidebar,
-            text="Consultar",
-            fg_color=theme.PRIMARY,
-            hover_color=theme.PRIMARY_HOVER,
-            text_color=theme.WHITE,
-            command=self.controller.event_search,
-            **button_style,
-        ).pack(anchor="w", pady=15, padx=10)
-
-        ctk.CTkLabel(sidebar, text="Total recaudado", text_color=theme.BLACK, font=theme.font(16, bold=True)).pack(
-            anchor="w", pady=(20, 2), padx=10
-        )
-        self.total_label = ctk.CTkLabel(sidebar, text="$0", text_color=theme.BLACK, font=theme.font(16, bold=True))
-        self.total_label.pack(anchor="w", padx=10)
-        self.cash_label = ctk.CTkLabel(sidebar, text="Efectivo: $0", text_color=theme.BLACK, font=theme.font(14))
-        self.cash_label.pack(anchor="w", pady=2, padx=10)
-        self.card_label = ctk.CTkLabel(sidebar, text="Tarjeta: $0", text_color=theme.BLACK, font=theme.font(14))
-        self.card_label.pack(anchor="w", pady=2, padx=10)
-        self.transfer_label = ctk.CTkLabel(
-            sidebar, text="Transferencia: $0", text_color=theme.BLACK, font=theme.font(14)
-        )
-        self.transfer_label.pack(anchor="w", pady=2, padx=10)
-
-        ctk.CTkButton(
-            sidebar,
-            text="Exportar a Excel",
-            fg_color=theme.SUCCESS,
-            hover_color=theme.SUCCESS_HOVER,
-            text_color=theme.WHITE,
-            command=self.controller.event_export,
-            **button_style,
-        ).pack(anchor="w", pady=15, padx=10)
-
-        ctk.CTkButton(
-            sidebar,
-            text="Volver al menú",
-            fg_color=theme.ACCENT,
-            hover_color=theme.ACCENT_HOVER,
-            text_color=theme.BLACK,
-            command=self.controller.event_back,
-            **button_style,
-        ).pack(side="bottom", pady=20, padx=10)
+        table_card = Card(self, padding=10)
+        table_card.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 16))
+        table_box = ctk.CTkFrame(table_card.body, fg_color="transparent")
+        table_box.pack(fill="both", expand=True)
+        self.tree = make_table(table_box, COLUMNS, "SalesReport")
 
     # ------------------------------------------------------------------ API para el controlador
     def load_table(self, rows: list[SalesReportRow]) -> None:
-        theme.clear_table(self.tree)
-        if not rows:
-            self.tree.insert("", "end", values=EMPTY_ROW)
-            return
-        for row in rows:
-            self.tree.insert(
-                "",
-                "end",
-                values=(
+        fill_table(
+            self.tree,
+            (
+                (
                     row.receipt_id,
                     row.date.strftime("%Y-%m-%d"),
                     row.time.strftime("%H:%M"),
                     row.code,
                     row.name,
                     row.quantity,
-                    f"${format_price(row.total)}",
+                    format_price(row.unit_price),
+                    format_price(row.total),
                     row.payment_method,
-                ),
-            )
+                )
+                for row in rows
+            ),
+            empty_message="Consulte un rango de fechas para ver las ventas",
+        )
 
     def set_totals(self, totals: SalesTotals) -> None:
-        self.total_label.configure(text=f"${format_price(totals.total)}")
-        self.cash_label.configure(text=f"Efectivo: ${format_price(totals.cash)}")
-        self.card_label.configure(text=f"Tarjeta: ${format_price(totals.card)}")
-        self.transfer_label.configure(text=f"Transferencia: ${format_price(totals.transfer)}")
+        self.stat_cards["total"].set_value(f"${format_price(totals.total)}")
+        self.stat_cards["cash"].set_value(f"${format_price(totals.cash)}")
+        self.stat_cards["card"].set_value(f"${format_price(totals.card)}")
+        self.stat_cards["transfer"].set_value(f"${format_price(totals.transfer)}")
+        self.stat_cards["count"].set_value(str(totals.receipt_count))
 
     def get_start_date(self) -> dt.date:
         return self.start_date.get_date()
@@ -158,14 +119,23 @@ class SalesReportView(ctk.CTkFrame):
     def get_end_date(self) -> dt.date:
         return self.end_date.get_date()
 
+    def set_dates(self, start: dt.date, end: dt.date) -> None:
+        self.start_date.set_date(start)
+        self.end_date.set_date(end)
+
 
 def _date_entry(parent) -> DateEntry:
     return DateEntry(
         parent,
-        width=18,
-        background="darkblue",
-        foreground="white",
-        borderwidth=2,
+        width=12,
+        font=theme.font(13),
+        background=theme.PRIMARY,
+        foreground=theme.ON_DARK,
+        headersbackground=theme.SURFACE_ALT,
+        normalbackground=theme.SURFACE,
+        weekendbackground=theme.SURFACE,
+        selectbackground=theme.PRIMARY,
+        borderwidth=1,
         date_pattern="yyyy-mm-dd",
         locale="es_CO",
     )

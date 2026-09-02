@@ -9,7 +9,6 @@ a = Analysis(
     pathex=[],
     binaries=[("libusb-1.0.dll", ".")],
     datas=[
-        ("images", "images"),
         ("migrations", "migrations"),
         ("config.example.json", "."),
         (".env.example", "."),

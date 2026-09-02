@@ -43,6 +43,22 @@ class SalesReportViewController:
         self.main_controller.show_menu()
 
     @guarded
+    def event_quick_range(self, key: str) -> None:
+        today = dt.date.today()
+        if key == "today":
+            start, end = today, today
+        elif key == "yesterday":
+            start = end = today - dt.timedelta(days=1)
+        elif key == "week":
+            start, end = today - dt.timedelta(days=today.weekday()), today
+        elif key == "month":
+            start, end = today.replace(day=1), today
+        else:
+            raise ValueError(f"Rango desconocido: {key}")
+        self.view.set_dates(start, end)
+        self.event_search()
+
+    @guarded
     def event_search(self) -> None:
         start = self.view.get_start_date()
         end = self.view.get_end_date()
@@ -98,14 +114,17 @@ def _build_workbook(rows: list[SalesReportRow], totals: SalesTotals | None) -> W
         )
     if totals is not None:
         sheet.append([])
-        sheet.append(["Total recaudado", "", "", "", "", "", "", "", totals.total])
-        sheet.append(["Efectivo", "", "", "", "", "", "", "", totals.cash])
-        sheet.append(["Tarjeta", "", "", "", "", "", "", "", totals.card])
-        sheet.append(["Transferencia", "", "", "", "", "", "", "", totals.transfer])
-        for row_cells in sheet.iter_rows(min_row=sheet.max_row - 3, max_row=sheet.max_row):
-            row_cells[0].font = Font(bold=True)
-    for column in ("B", "F"):
-        sheet.column_dimensions[column].width = 14 if column == "B" else 36
+        for label, value in (
+            ("Total recaudado", totals.total),
+            ("Efectivo", totals.cash),
+            ("Tarjeta", totals.card),
+            ("Transferencia", totals.transfer),
+            ("Recibos", totals.receipt_count),
+        ):
+            sheet.append([label, "", "", "", "", "", "", "", value])
+            sheet.cell(row=sheet.max_row, column=1).font = Font(bold=True)
+    sheet.column_dimensions["B"].width = 14
+    sheet.column_dimensions["F"].width = 36
     for column in ("H", "I"):
         for cell in sheet[column][1:]:
             cell.number_format = "#,##0"

@@ -4,7 +4,8 @@
     "nit": "000000000-0",
     "address": "Calle 1 # 2 - 3",
     "phone": "300 000 0000",
-    "receipt_footer": "Gracias por su compra"
+    "receipt_footer": "Gracias por su compra",
+    "logo": ""
   },
   "printer": {
     "enabled": true,

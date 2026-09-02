@@ -117,6 +117,18 @@ def test_sale_discounts_stock_and_keeps_price_snapshot(db):
     assert stored[0].total == Decimal(2000)
 
 
+def test_best_sellers_rank_by_units_sold(db):
+    db.add_product(make_product("A1", stock=10))
+    db.add_product(make_product("B2", stock=10))
+    db.add_product(make_product("C3", stock=10))
+    a1, b2 = db.get_product("A1"), db.get_product("B2")
+    db.add_receipt(Receipt.create(PAYMENT_CASH, [SoldProduct(a1, 1), SoldProduct(b2, 5)]))
+    db.add_receipt(Receipt.create(PAYMENT_CASH, [SoldProduct(a1, 2)]))
+
+    assert [p.code for p in db.get_best_sellers()] == ["B2", "A1"]
+    assert [p.code for p in db.get_best_sellers(limit=1)] == ["B2"]
+
+
 def test_sale_without_stock_leaves_nothing_behind(db):
     db.add_product(make_product(stock=1))
     product = db.get_product("A1")

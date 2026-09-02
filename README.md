@@ -8,12 +8,21 @@ Es la base del producto POS de Inti Nova.
 
 ## Qué hace hoy
 
-- Ventas con lector de código de barras, cobro en efectivo, tarjeta o
-  transferencia y ventana de resumen. El recibo se imprime solo si el cajero
+- Ventas: catálogo por categorías y más vendidos, búsqueda en vivo, lector
+  de código de barras, carrito con cambio de cantidades, cobro en efectivo
+  con botones de billetes, teclado numérico y cambio en vivo, tarjeta o
+  transferencia, y ventana de resumen. El recibo se imprime solo si el cajero
   activa "Imprimir recibo" antes de cobrar.
-- Inventario: productos, categorías, existencias, valorización.
-- Reporte de ventas por rango de fechas con exportación a Excel.
-- Auditoría de cambios del catálogo.
+- Inventario: indicadores de valor y existencias, búsqueda y filtro por
+  categoría, filas resaltadas con pocas existencias o agotadas.
+- Gestión de productos: buscar, crear, modificar, agregar existencias y dar de
+  baja, con precio calculado desde costo y margen.
+- Reporte de ventas por rango de fechas con atajos (hoy, ayer, semana, mes),
+  totales por método de pago y exportación a Excel.
+- Auditoría de cambios del catálogo con detalle antes y después.
+
+La paleta, las fuentes y los componentes compartidos viven en `view/theme.py`
+y `view/widgets.py`; cualquier cambio visual global se hace ahí.
 
 ## Requisitos
 
@@ -30,7 +39,10 @@ Ninguno se sube al repositorio.
 1. `.env`: copiar desde `.env.example` y escribir la clave de PostgreSQL
    (`DB_PASSWORD`) y la clave temporal de administración (`ADMIN_PASSWORD`).
 2. `config.json`: copiar desde `config.example.json` y ajustar los datos del
-   negocio que salen en el recibo y los parámetros de la impresora.
+   negocio que salen en el recibo y los parámetros de la impresora. El campo
+   `logo` acepta la ruta a una imagen PNG o JPG de la tienda (relativa a la
+   carpeta del programa, por ejemplo `logo.png`); si queda vacío, el menú
+   muestra solo el nombre.
 
 Para identificar la impresora: `python scripts/find_usb.py` muestra los IDs
 USB; `python scripts/list_endpoints.py` muestra los endpoints; y
@@ -38,6 +50,10 @@ USB; `python scripts/list_endpoints.py` muestra los endpoints; y
 
 Las tablas se crean y actualizan solas al iniciar, con las migraciones de la
 carpeta `migrations/`.
+
+Para probar o capacitar con datos realistas, `python scripts/seed_demo.py`
+carga 100 productos de ejemplo en 11 categorías. Se puede repetir sin
+duplicar nada.
 
 ## Desarrollo
 

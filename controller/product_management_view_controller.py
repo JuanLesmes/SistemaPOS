@@ -23,6 +23,11 @@ class ProductManagementViewController:
     def event_go_back(self) -> None:
         self.main_controller.show_admin_view()
 
+    def open_product(self, product: Product) -> None:
+        """Carga un producto elegido desde otra pantalla."""
+        self.fill_form(product)
+        self.view.show_search_results([product])
+
     # ------------------------------------------------------------------ búsqueda
     @guarded
     def event_search(self) -> None:
@@ -32,20 +37,27 @@ class ProductManagementViewController:
             return
         exact = self.db.get_product(term)
         if exact is not None:
+            self.view.show_search_results([exact])
             self.fill_form(exact)
-            self.view.show_search_results([], self.fill_form)
             return
         matches = self.db.search_products(term)
-        self.view.show_search_results(matches, self.fill_form)
+        self.view.show_search_results(matches)
         if not matches:
             messagebox.showinfo("Búsqueda", f"No se encontraron productos para '{term}'.")
+
+    def event_result_selected(self, product: Product) -> None:
+        self.fill_form(product)
+
+    def event_new(self) -> None:
+        self.view.clear_fields()
+        self.view.focus_code()
 
     # ------------------------------------------------------------------ cambios
     @guarded
     def event_add_stock(self) -> None:
         code = self.view.get_code()
         if not code:
-            raise ValueError("Escriba el código del producto al que desea agregar existencias.")
+            raise ValueError("Cargue o escriba el código del producto al que desea agregar existencias.")
         quantity = parse_int(self.view.get_stock(), minimum=1)
         product = self.db.add_stock(code, quantity)
         self.fill_form(product)
@@ -58,25 +70,21 @@ class ProductManagementViewController:
     def event_add_product(self) -> None:
         product = self._product_from_form()
         self.db.add_product(product)
-        self.refresh_categories()
-        self.main_controller.refresh_all_categories()
-        self.view.clear_fields()
+        self._after_change()
         messagebox.showinfo("Producto agregado", f"'{product.name}' quedó registrado.")
 
     @guarded
     def event_modify_product(self) -> None:
         product = self._product_from_form()
         self.db.update_product(product)
-        self.refresh_categories()
-        self.main_controller.refresh_all_categories()
-        self.view.clear_fields()
+        self._after_change()
         messagebox.showinfo("Producto modificado", f"'{product.name}' quedó actualizado.")
 
     @guarded
     def event_delete_product(self) -> None:
         code = self.view.get_code()
         if not code:
-            raise ValueError("Escriba el código del producto que desea eliminar.")
+            raise ValueError("Cargue o escriba el código del producto que desea eliminar.")
         product = self.db.get_product(code)
         if product is None:
             messagebox.showinfo("Producto", f"No existe un producto activo con el código {code}.")
@@ -90,7 +98,7 @@ class ProductManagementViewController:
         if not confirmed:
             return
         self.db.deactivate_product(code)
-        self.view.clear_fields()
+        self._after_change()
         messagebox.showinfo("Producto eliminado", f"'{product.name}' ya no está disponible.")
 
     @guarded
@@ -117,8 +125,14 @@ class ProductManagementViewController:
         self.view.set_categories(self.db.get_categories())
 
     def fill_form(self, product: Product) -> None:
-        self.view.clear_search()
         self.view.set_form(product)
+
+    def _after_change(self) -> None:
+        self.refresh_categories()
+        self.main_controller.refresh_all_categories()
+        self.view.clear_fields()
+        self.view.clear_search()
+        self.view.show_search_results([])
 
     def _product_from_form(self) -> Product:
         """Lee y valida el formulario. Lanza ValueError con un mensaje claro si algo falta."""

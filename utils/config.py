@@ -47,6 +47,7 @@ class BusinessSettings:
     address: str
     phone: str
     receipt_footer: str
+    logo: str = ""  # ruta a una imagen PNG o JPG; relativa a la carpeta del programa si no es absoluta
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,7 @@ def _business_from(raw: dict) -> BusinessSettings:
         address=str(raw.get("address", "")),
         phone=str(raw.get("phone", "")),
         receipt_footer=str(raw.get("receipt_footer", "Gracias por su compra")),
+        logo=str(raw.get("logo", "") or ""),
     )
 
 

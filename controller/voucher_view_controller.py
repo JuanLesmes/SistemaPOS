@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Callable
 from decimal import Decimal
 
 from model.receipt import Receipt
@@ -18,8 +19,14 @@ class VoucherViewController:
         receipt: Receipt,
         received: Decimal | None,
         change: Decimal,
+        on_print: Callable[[], None] | None = None,
     ) -> None:
-        self.view = VoucherView(parent, self, business, receipt, received, change)
+        self._on_print = on_print
+        self.view = VoucherView(parent, self, business, receipt, received, change, can_print=on_print is not None)
+
+    def event_print(self) -> None:
+        if self._on_print is not None:
+            self._on_print()
 
     def event_close(self) -> None:
         if self.view.winfo_exists():

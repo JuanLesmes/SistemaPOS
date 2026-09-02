@@ -10,7 +10,7 @@ from view.menu_view import MenuView
 class MenuController:
     def __init__(self, parent: tk.Frame, main_controller) -> None:
         self.main_controller = main_controller
-        self.view = MenuView(parent, self, business_name=main_controller.settings.business.name)
+        self.view = MenuView(parent, self, business=main_controller.settings.business)
 
     def event_go_sales(self) -> None:
         self.main_controller.show_sales_view()

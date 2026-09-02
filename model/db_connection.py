@@ -141,7 +141,7 @@ class DBConnection:
         with self._transaction() as cur:
             try:
                 cur.execute("DELETE FROM categories WHERE category_name = %s", (name,))
-            except psycopg2.errors.ForeignKeyViolation as exc:
+            except (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.RestrictViolation) as exc:
                 raise CategoryInUseError(
                     f"La categoría '{name}' tiene productos asociados (activos o inactivos). "
                     "Cambie esos productos de categoría antes de eliminarla."
@@ -183,6 +183,23 @@ class DBConnection:
                  LIMIT %s
                 """,
                 (pattern, pattern, pattern, pattern, SEARCH_LIMIT),
+            )
+            return [_product_from(row) for row in cur.fetchall()]
+
+    def get_best_sellers(self, days: int = 30, limit: int = 60) -> list[Product]:
+        """Productos activos ordenados por unidades vendidas en los últimos ``days`` días."""
+        with self._transaction() as cur:
+            cur.execute(
+                _PRODUCT_SELECT
+                + """
+                  JOIN sold_products sp ON sp.codep = p.code
+                  JOIN receipts r ON r.idreceipt = sp.idreceipt
+                 WHERE p.active AND r.date >= CURRENT_DATE - %s
+                 GROUP BY p.code, p.name, p.cost, p.price, p.stock, p.description, p.active, c.category_name
+                 ORDER BY SUM(sp.quantity) DESC, lower(p.name)
+                 LIMIT %s
+                """,
+                (days, limit),
             )
             return [_product_from(row) for row in cur.fetchall()]
 
@@ -362,7 +379,7 @@ class DBConnection:
             cur.execute(
                 """
                 SELECT r.idreceipt, r.total, r.date, r.time, r.payment_method,
-                       sp.codep, sp.quantity, sp.unit_price, sp.unit_cost,
+                       sp.codep AS code, sp.quantity, sp.unit_price, sp.unit_cost,
                        p.name, p.cost, p.price, p.stock, p.description, p.active,
                        c.category_name AS category
                   FROM receipts r
@@ -389,11 +406,11 @@ class DBConnection:
                     total=Decimal(row["total"]),
                 )
                 receipts[receipt_id] = receipt
-            if row["codep"] is None:
+            if row["code"] is None:
                 continue
             receipt.sold_products.append(
                 SoldProduct(
-                    product=_product_from(row) if row["name"] is not None else _missing_product(row["codep"]),
+                    product=_product_from(row) if row["name"] is not None else _missing_product(row["code"]),
                     quantity=int(row["quantity"]),
                     unit_price=Decimal(row["unit_price"]),
                     unit_cost=Decimal(row["unit_cost"]),
@@ -445,8 +462,9 @@ class DBConnection:
         if not create:
             raise AppError(f"La categoría '{name}' no existe.")
         cur.execute("INSERT INTO categories (category_name) VALUES (%s) RETURNING idcategory", (name,))
+        category_id = int(cur.fetchone()["idcategory"])  # leer antes de ejecutar otra consulta
         self._log(cur, "add_category", details={"category_name": name})
-        return int(cur.fetchone()["idcategory"])
+        return category_id
 
     def _log(
         self,
