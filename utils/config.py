@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -59,6 +59,15 @@ class PrinterSettings:
     out_ep: int
     timeout_ms: int
     paper_width_chars: int
+    open_drawer: bool = False  # abrir el cajón monedero (conectado a la impresora) al cobrar en efectivo
+
+
+@dataclass(frozen=True)
+class BackupSettings:
+    enabled: bool = True  # copia automática al primer arranque de cada día
+    directory: str = "backups"  # relativa a la carpeta del programa si no es absoluta
+    keep: int = 30  # cuántas copias se conservan
+    pg_bin: str = ""  # carpeta bin de PostgreSQL; vacío = se busca sola
 
 
 @dataclass(frozen=True)
@@ -67,6 +76,7 @@ class Settings:
     business: BusinessSettings
     printer: PrinterSettings
     admin_password: str
+    backup: BackupSettings = field(default_factory=BackupSettings)
 
 
 def load_settings(base_dir: Path | None = None) -> Settings:
@@ -102,6 +112,7 @@ def load_settings(base_dir: Path | None = None) -> Settings:
         business=_business_from(data.get("business", {})),
         printer=_printer_from(data.get("printer", {})),
         admin_password=os.getenv("ADMIN_PASSWORD", ""),
+        backup=_backup_from(data.get("backup", {})),
     )
 
 
@@ -140,9 +151,22 @@ def _printer_from(raw: dict) -> PrinterSettings:
             out_ep=_as_int(raw.get("out_ep", "0x02")),
             timeout_ms=_as_int(raw.get("timeout_ms", 10000)),
             paper_width_chars=_as_int(raw.get("paper_width_chars", 32)),
+            open_drawer=bool(raw.get("open_drawer", False)),
         )
     except ValueError as exc:
         raise ConfigError(f"Valor inválido en la sección printer de {CONFIG_FILE}: {exc}") from exc
+
+
+def _backup_from(raw: dict) -> BackupSettings:
+    try:
+        return BackupSettings(
+            enabled=bool(raw.get("enabled", True)),
+            directory=str(raw.get("directory", "backups") or "backups"),
+            keep=max(1, _as_int(raw.get("keep", 30))),
+            pg_bin=str(raw.get("pg_bin", "") or ""),
+        )
+    except ValueError as exc:
+        raise ConfigError(f"Valor inválido en la sección backup de {CONFIG_FILE}: {exc}") from exc
 
 
 def _as_int(value: object) -> int:

@@ -12,7 +12,6 @@ from decimal import Decimal
 
 import customtkinter as ctk
 
-from model.inventory import LOW_STOCK_THRESHOLD
 from model.pending_sale import PendingSale
 from model.product import Product
 from model.sold_product import SoldProduct
@@ -56,9 +55,10 @@ class SalesView(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
-        header = HeaderBar(self, "Ventas", "Escanee, busque o toque un producto para agregarlo a la venta")
-        header.grid(row=0, column=0, columnspan=3, sticky="ew")
-        header.add_action("Volver al menú", self.controller.event_back)
+        self.header = HeaderBar(self, "Ventas", "Escanee, busque o toque un producto para agregarlo a la venta")
+        self.header.grid(row=0, column=0, columnspan=3, sticky="ew")
+        self.header.add_action("Cierre de caja", self.controller.event_shift, kind="accent")
+        self.header.add_action("Volver al menú", self.controller.event_back)
 
         self._build_queue().grid(row=1, column=0, columnspan=3, sticky="ew", padx=16, pady=(10, 0))
         self._build_categories().grid(row=2, column=0, sticky="ns", padx=(16, 0), pady=10)
@@ -146,13 +146,19 @@ class SalesView(ctk.CTkFrame):
         button(line_actions, "+", self.controller.event_increase, kind="secondary", size="sm", width=46).pack(
             side="left", padx=(6, 0)
         )
-        button(line_actions, "Quitar", self.controller.event_remove_line, kind="secondary", size="sm", width=90).pack(
+        button(line_actions, "Quitar", self.controller.event_remove_line, kind="secondary", size="sm", width=80).pack(
+            side="left", padx=(6, 0)
+        )
+        button(line_actions, "Descuento", self.controller.event_discount, kind="secondary", size="sm", width=100).pack(
             side="left", padx=(6, 0)
         )
         button(
             line_actions, "Cancelar venta", self.controller.event_cancel_sale, kind="ghost", size="sm", width=120
         ).pack(side="right")
 
+        self.discount_label = ctk.CTkLabel(
+            cart.body, text="", font=theme.font(12, bold=True), text_color=theme.DANGER, anchor="e"
+        )
         total_row = ctk.CTkFrame(cart.body, fg_color="transparent")
         total_row.pack(fill="x", pady=(10, 0))
         ctk.CTkLabel(total_row, text="Total", font=theme.font(15, bold=True), text_color=theme.MUTED).pack(side="left")
@@ -241,6 +247,9 @@ class SalesView(ctk.CTkFrame):
         pay_row.pack(fill="x", pady=(8, 0))
         for column in range(3):
             pay_row.grid_columnconfigure(column, weight=1, uniform="pay")
+        button(pay_row, "Pago mixto", self.controller.event_mixed_payment, kind="ghost", size="sm", height=34).grid(
+            row=1, column=0, columnspan=3, sticky="ew", pady=(6, 0)
+        )
         button(pay_row, "Efectivo", self.controller.event_cash_payment, kind="accent", size="lg", height=50).grid(
             row=0, column=0, sticky="ew", padx=(0, 4)
         )
@@ -363,6 +372,17 @@ class SalesView(ctk.CTkFrame):
     def set_total(self, total: Decimal) -> None:
         self.total_label.configure(text=f"${format_price(total)}")
 
+    def set_discount(self, line_discounts: Decimal, sale_discount: Decimal) -> None:
+        total = line_discounts + sale_discount
+        if total > 0:
+            self.discount_label.configure(text=f"Descuentos  -${format_price(total)}")
+            self.discount_label.pack(fill="x", pady=(6, 0), before=self.total_label.master)
+        else:
+            self.discount_label.pack_forget()
+
+    def set_shift_text(self, text: str) -> None:
+        self.header.set_subtitle(text)
+
     # ------------------------------------------------------------------ cobro
     def get_received_amount(self) -> str:
         return self.received_entry.get().strip()
@@ -456,7 +476,7 @@ class ProductCard(ctk.CTkFrame):
 def _stock_badge(product: Product) -> tuple[str, str]:
     if product.stock <= 0:
         return "Agotado", theme.DANGER
-    if product.stock <= LOW_STOCK_THRESHOLD:
+    if product.low_stock:
         return f"Quedan {product.stock}", theme.WARNING
     return f"{product.stock} disponibles", theme.MUTED
 

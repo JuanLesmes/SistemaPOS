@@ -14,6 +14,13 @@
     "in_ep": "0x81",
     "out_ep": "0x02",
     "timeout_ms": 10000,
-    "paper_width_chars": 32
+    "paper_width_chars": 32,
+    "open_drawer": false
+  },
+  "backup": {
+    "enabled": true,
+    "directory": "backups",
+    "keep": 30,
+    "pg_bin": ""
   }
 }

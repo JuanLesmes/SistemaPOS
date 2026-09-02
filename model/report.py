@@ -8,6 +8,8 @@ from decimal import Decimal
 
 from model.receipt import PAYMENT_CARD, PAYMENT_CASH, PAYMENT_TRANSFER, Receipt
 
+ZERO = Decimal(0)
+
 
 @dataclass(frozen=True)
 class SalesReportRow:
@@ -22,6 +24,8 @@ class SalesReportRow:
     quantity: int
     unit_price: Decimal
     total: Decimal
+    cashier: str | None = None
+    voided: bool = False
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,13 @@ class SalesTotals:
     card: Decimal
     transfer: Decimal
     receipt_count: int = 0
+    returns: Decimal = ZERO
+    voided_count: int = 0
+    tax: Decimal = ZERO
+
+    @property
+    def net(self) -> Decimal:
+        return self.total - self.returns
 
 
 def rows_from_receipts(receipts: list[Receipt]) -> list[SalesReportRow]:
@@ -41,6 +52,7 @@ def rows_from_receipts(receipts: list[Receipt]) -> list[SalesReportRow]:
         for sp in receipt.sold_products:
             previous = merged.get(sp.code)
             quantity = sp.quantity + (previous.quantity if previous else 0)
+            total = sp.total + (previous.total if previous else ZERO)
             merged[sp.code] = SalesReportRow(
                 receipt_id=receipt.id or 0,
                 date=receipt.date,
@@ -50,20 +62,24 @@ def rows_from_receipts(receipts: list[Receipt]) -> list[SalesReportRow]:
                 name=sp.product.name,
                 quantity=quantity,
                 unit_price=sp.unit_price,
-                total=sp.unit_price * quantity,
+                total=total,
+                cashier=receipt.cashier,
+                voided=receipt.is_voided,
             )
         rows.extend(merged.values())
     return rows
 
 
 def totals_from_receipts(receipts: list[Receipt]) -> SalesTotals:
-    by_method: dict[str, Decimal] = {}
-    for receipt in receipts:
-        by_method[receipt.payment_method] = by_method.get(receipt.payment_method, Decimal(0)) + receipt.total
+    """Totales de las ventas válidas: los recibos anulados no cuentan y las devoluciones se restan aparte."""
+    completed = [r for r in receipts if not r.is_voided]
     return SalesTotals(
-        total=sum(by_method.values(), Decimal(0)),
-        cash=by_method.get(PAYMENT_CASH, Decimal(0)),
-        card=by_method.get(PAYMENT_CARD, Decimal(0)),
-        transfer=by_method.get(PAYMENT_TRANSFER, Decimal(0)),
-        receipt_count=len(receipts),
+        total=sum((r.total for r in completed), ZERO),
+        cash=sum((r.paid_with(PAYMENT_CASH) for r in completed), ZERO),
+        card=sum((r.paid_with(PAYMENT_CARD) for r in completed), ZERO),
+        transfer=sum((r.paid_with(PAYMENT_TRANSFER) for r in completed), ZERO),
+        receipt_count=len(completed),
+        returns=sum((r.returned_total for r in completed), ZERO),
+        voided_count=len(receipts) - len(completed),
+        tax=sum((r.tax_total for r in completed), ZERO),
     )

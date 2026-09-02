@@ -12,9 +12,12 @@ import customtkinter as ctk
 from controller.main_controller import MainController
 from model.db_connection import DBConnection
 from model.errors import AppError
+from model.users_bootstrap import ensure_first_admin
 from utils.config import load_settings
 from utils.logging_setup import setup_logging
 from utils.paths import app_dir
+from utils.setup import needs_setup
+from view.setup_wizard import run_setup_wizard
 
 WINDOW_GEOMETRY = "1520x750"
 MIN_WINDOW_SIZE = (1100, 650)
@@ -32,9 +35,17 @@ def main() -> int:
     root = tk.Tk()
     root.withdraw()
 
+    if needs_setup(app_dir()):
+        logger.info("Primer arranque: se abre el asistente de configuración")
+        if not run_setup_wizard(root):
+            logger.info("Asistente cancelado; la aplicación no arranca")
+            root.destroy()
+            return 1
+
     try:
         settings = load_settings()
         db = DBConnection(settings.database)
+        ensure_first_admin(db, settings.admin_password)
     except AppError as exc:
         logger.error("No se pudo iniciar: %s", exc)
         messagebox.showerror("No se pudo iniciar", str(exc))

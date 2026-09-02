@@ -56,6 +56,14 @@ class SalesReportView(ctk.CTkFrame):
         button(body, "Consultar", self.controller.event_search, kind="primary", size="sm", height=40, width=130).grid(
             row=0, column=4, padx=(16, 0)
         )
+        actions = ctk.CTkFrame(body, fg_color="transparent")
+        actions.grid(row=0, column=6, sticky="e", padx=(16, 0))
+        button(
+            actions, "Devolver productos", self.controller.event_return, kind="secondary", size="sm", height=40
+        ).pack(side="left", padx=(0, 6))
+        button(actions, "Anular venta", self.controller.event_void, kind="danger-soft", size="sm", height=40).pack(
+            side="left"
+        )
         quick = ctk.CTkFrame(body, fg_color="transparent")
         quick.grid(row=0, column=5, sticky="e", padx=(24, 0))
         body.grid_columnconfigure(5, weight=1)
@@ -71,6 +79,7 @@ class SalesReportView(ctk.CTkFrame):
             ("cash", "Efectivo", theme.ACCENT),
             ("card", "Tarjeta", theme.HEADER),
             ("transfer", "Transferencia", theme.SUCCESS),
+            ("returns", "Devoluciones", theme.DANGER),
             ("count", "Recibos", theme.MUTED),
         )
         self.stat_cards: dict[str, StatCard] = {}
@@ -88,6 +97,7 @@ class SalesReportView(ctk.CTkFrame):
 
     # ------------------------------------------------------------------ API para el controlador
     def load_table(self, rows: list[SalesReportRow]) -> None:
+        self._rows = list(rows)
         fill_table(
             self.tree,
             (
@@ -100,19 +110,30 @@ class SalesReportView(ctk.CTkFrame):
                     row.quantity,
                     format_price(row.unit_price),
                     format_price(row.total),
-                    row.payment_method,
+                    "ANULADO" if row.voided else row.payment_method,
                 )
                 for row in rows
             ),
+            extra_tags=lambda row: ("bad",) if row[8] == "ANULADO" else (),
             empty_message="Consulte un rango de fechas para ver las ventas",
         )
+
+    def selected_row(self) -> SalesReportRow | None:
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        index = self.tree.index(selection[0])
+        return self._rows[index] if index < len(self._rows) else None
 
     def set_totals(self, totals: SalesTotals) -> None:
         self.stat_cards["total"].set_value(f"${format_price(totals.total)}")
         self.stat_cards["cash"].set_value(f"${format_price(totals.cash)}")
         self.stat_cards["card"].set_value(f"${format_price(totals.card)}")
         self.stat_cards["transfer"].set_value(f"${format_price(totals.transfer)}")
+        self.stat_cards["returns"].set_value(f"${format_price(totals.returns)}")
         self.stat_cards["count"].set_value(str(totals.receipt_count))
+        self.stat_cards["count"].set_note(f"{totals.voided_count} anulados" if totals.voided_count else "")
+        self.stat_cards["total"].set_note(f"Neto ${format_price(totals.net)}" if totals.returns else "")
 
     def get_start_date(self) -> dt.date:
         return self.start_date.get_date()

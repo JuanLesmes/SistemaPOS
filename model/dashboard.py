@@ -13,7 +13,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
-from model.inventory import LOW_STOCK_THRESHOLD
 from model.product import Product
 from model.receipt import PAYMENT_METHODS, Receipt
 
@@ -87,6 +86,8 @@ class DashboardStats:
     dead_stock: list[DeadStockItem] = field(default_factory=list)
     dead_stock_count: int = 0
     dead_stock_value: Decimal = ZERO
+    returns_total: Decimal = ZERO
+    voided_count: int = 0
     insights: list[str] = field(default_factory=list)
 
     @property
@@ -124,6 +125,9 @@ def build_dashboard(
     profit_by_code: dict[str, Decimal] = defaultdict(lambda: ZERO)
     names: dict[str, str] = {}
 
+    voided_count = sum(1 for r in receipts if r.is_voided)
+    receipts = [r for r in receipts if not r.is_voided]
+    returns_total = sum((r.returned_total for r in receipts), ZERO)
     total = ZERO
     units = 0
     profit = ZERO
@@ -132,9 +136,10 @@ def build_dashboard(
         by_day[receipt.date] = by_day.get(receipt.date, ZERO) + receipt.total
         by_hour[receipt.time.hour] += receipt.total
         by_weekday[receipt.date.weekday()] += receipt.total
-        by_payment[receipt.payment_method] = by_payment.get(receipt.payment_method, ZERO) + receipt.total
+        for payment in receipt.payments:
+            by_payment[payment.method] = by_payment.get(payment.method, ZERO) + payment.amount
         for sp in receipt.sold_products:
-            line_profit = (sp.unit_price - sp.unit_cost) * sp.quantity
+            line_profit = sp.profit
             units += sp.quantity
             profit += line_profit
             by_category[sp.product.category or "Sin categoría"] += sp.total
@@ -166,7 +171,9 @@ def build_dashboard(
         units=units,
         profit=profit,
         margin_pct=(profit / total * 100).quantize(ONE, rounding=ROUND_HALF_UP) if total else ZERO,
-        previous=summarize(previous_receipts) if previous_receipts is not None else None,
+        previous=summarize([r for r in previous_receipts if not r.is_voided])
+        if previous_receipts is not None
+        else None,
         by_day=sorted(by_day.items()),
         by_hour=sorted(by_hour.items()),
         by_weekday=sorted(by_weekday.items()),
@@ -178,6 +185,8 @@ def build_dashboard(
         dead_stock=dead_stock,
         dead_stock_count=dead_count,
         dead_stock_value=dead_value,
+        returns_total=returns_total,
+        voided_count=voided_count,
     )
     return DashboardStats(**{**stats.__dict__, "insights": build_insights(stats)})
 
@@ -245,7 +254,7 @@ def _inventory_actions(
         if sold > 0:
             per_day = Decimal(sold) / Decimal(days)
             days_left = (Decimal(product.stock) / per_day).quantize(ONE, rounding=ROUND_HALF_UP) if per_day else None
-            if product.stock <= LOW_STOCK_THRESHOLD or (days_left is not None and days_left <= RESTOCK_DAYS):
+            if product.stock <= product.min_stock or (days_left is not None and days_left <= RESTOCK_DAYS):
                 restock.append(RestockItem(product.code, product.name, product.stock, sold, days_left))
         elif product.stock > 0:
             dead.append(DeadStockItem(product.code, product.name, product.stock, product.cost * product.stock))

@@ -14,6 +14,7 @@ from view.widgets import Card, HeaderBar, button, clear_entry, fill_table, make_
 
 # La primera opción (vacía) significa "precio manual": no se recalcula solo.
 GAIN_OPTIONS = ("", "10", "20", "25", "30", "40", "50", "100")
+TAX_OPTIONS = ("0", "5", "19")
 
 RESULT_COLUMNS = (
     ("code", "Código", 120, "w", False),
@@ -126,9 +127,12 @@ class ProductManagementView(ctk.CTkFrame):
             height=40,
         ).grid(row=0, column=1, padx=(8, 0))
 
-        self.entry_stock = field("Stock", 1, 3, columnspan=1)
-        button(body, "Agregar existencias", self.controller.event_add_stock, kind="success", size="sm", height=40).grid(
-            row=3, column=4, columnspan=2, sticky="ew", padx=(0, 12)
+        self.entry_stock = field("Stock inicial", 1, 3, columnspan=1)
+        button(
+            body, "Ajustar existencias", self.controller.event_adjust_stock, kind="success", size="sm", height=40
+        ).grid(row=3, column=4, sticky="ew", padx=(0, 6))
+        button(body, "Kárdex", self.controller.event_kardex, kind="secondary", size="sm", height=40).grid(
+            row=3, column=5, sticky="ew", padx=(0, 12)
         )
 
         self.entry_cost = field("Costo", 2, 0)
@@ -152,7 +156,25 @@ class ProductManagementView(ctk.CTkFrame):
         self.cmb_gain.grid(row=5, column=2, sticky="ew", padx=(0, 12))
         self.entry_price = field("Precio de venta", 2, 3, columnspan=3)
 
-        section_label(body, "Descripción").grid(row=6, column=0, columnspan=6, sticky="w", pady=(10, 2))
+        section_label(body, "IVA % incluido en el precio").grid(row=6, column=0, columnspan=2, sticky="w", pady=(10, 2))
+        self.cmb_tax = ctk.CTkComboBox(
+            body,
+            values=list(TAX_OPTIONS),
+            state="readonly",
+            height=40,
+            font=theme.font(14),
+            dropdown_font=theme.font(13),
+            fg_color=theme.SURFACE_ALT,
+            border_color=theme.BORDER,
+            button_color=theme.PRIMARY,
+            button_hover_color=theme.PRIMARY_HOVER,
+            text_color=theme.TEXT,
+        )
+        self.cmb_tax.set(TAX_OPTIONS[0])
+        self.cmb_tax.grid(row=7, column=0, columnspan=2, sticky="ew", padx=(0, 12))
+        self.entry_min_stock = field("Stock mínimo (aviso de reposición)", 3, 2, columnspan=2)
+
+        section_label(body, "Descripción").grid(row=8, column=0, columnspan=6, sticky="w", pady=(10, 2))
         self.entry_description = ctk.CTkTextbox(
             body,
             height=70,
@@ -163,11 +185,11 @@ class ProductManagementView(ctk.CTkFrame):
             text_color=theme.TEXT,
             corner_radius=8,
         )
-        self.entry_description.grid(row=7, column=0, columnspan=6, sticky="ew", padx=(0, 12))
+        self.entry_description.grid(row=9, column=0, columnspan=6, sticky="ew", padx=(0, 12))
 
-        body.grid_rowconfigure(8, weight=1)
+        body.grid_rowconfigure(10, weight=1)
         actions = ctk.CTkFrame(body, fg_color="transparent")
-        actions.grid(row=9, column=0, columnspan=6, sticky="ew", pady=(16, 0))
+        actions.grid(row=11, column=0, columnspan=6, sticky="ew", pady=(16, 0))
         button(actions, "Limpiar", self.controller.event_new, kind="ghost").pack(side="left")
         button(actions, "Agregar producto", self.controller.event_add_product, kind="success", width=170).pack(
             side="right"
@@ -226,6 +248,12 @@ class ProductManagementView(ctk.CTkFrame):
     def get_description(self) -> str:
         return self.entry_description.get("1.0", "end").strip()
 
+    def get_tax_rate(self) -> str:
+        return self.cmb_tax.get().strip()
+
+    def get_min_stock(self) -> str:
+        return self.entry_min_stock.get().strip()
+
     def set_form(self, product: Product) -> None:
         _set_entry(self.entry_code, product.code)
         _set_entry(self.entry_name, product.name)
@@ -233,16 +261,26 @@ class ProductManagementView(ctk.CTkFrame):
         _set_entry(self.entry_cost, format_money_input(product.cost))
         self.cmb_gain.set("")  # precio manual: no se recalcula al cargar
         _set_entry(self.entry_price, format_money_input(product.price))
+        self.cmb_tax.set(str(int(product.tax_rate)) if str(int(product.tax_rate)) in TAX_OPTIONS else TAX_OPTIONS[0])
+        _set_entry(self.entry_min_stock, str(product.min_stock))
         self.entry_description.delete("1.0", "end")
         self.entry_description.insert("1.0", product.description)
         if product.category in self.cmb_category.cget("values"):
             self.cmb_category.set(product.category)
 
     def clear_fields(self) -> None:
-        for widget in (self.entry_code, self.entry_name, self.entry_stock, self.entry_cost, self.entry_price):
+        for widget in (
+            self.entry_code,
+            self.entry_name,
+            self.entry_stock,
+            self.entry_cost,
+            self.entry_price,
+            self.entry_min_stock,
+        ):
             _set_entry(widget, "")
         self.entry_description.delete("1.0", "end")
         self.cmb_gain.set("")
+        self.cmb_tax.set(TAX_OPTIONS[0])
         values = self.cmb_category.cget("values")
         self.cmb_category.set(values[0] if values else "")
 

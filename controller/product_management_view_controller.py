@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 import tkinter as tk
+from decimal import Decimal
 from tkinter import messagebox
 
 from controller.common import guarded
 from model.db_connection import DBConnection
-from model.product import Product
-from utils.formatters import parse_int, parse_money
+from model.product import DEFAULT_MIN_STOCK, Product
+from utils.formatters import format_price, parse_int, parse_money
+from view.dialogs import TableDialog, ask_form
 from view.product_management_view import ProductManagementView
+
+KARDEX_COLUMNS = (
+    ("date", "Fecha y hora", 150, "w", False),
+    ("kind", "Tipo", 110, "w", False),
+    ("quantity", "Cantidad", 90, "center", False),
+    ("after", "Quedaron", 90, "center", False),
+    ("reference", "Referencia", 170, "w"),
+    ("reason", "Motivo", 200, "w"),
+    ("user", "Usuario", 100, "w", False),
+)
 
 
 class ProductManagementViewController:
@@ -17,6 +29,7 @@ class ProductManagementViewController:
         self.main_controller = main_controller
         self.db = db
         self.view = ProductManagementView(parent, self)
+        self.ask_form = ask_form  # reemplazable en pruebas
         self.refresh_categories()
 
     # ------------------------------------------------------------------ navegación
@@ -54,16 +67,69 @@ class ProductManagementViewController:
 
     # ------------------------------------------------------------------ cambios
     @guarded
-    def event_add_stock(self) -> None:
+    def event_adjust_stock(self) -> None:
         code = self.view.get_code()
         if not code:
-            raise ValueError("Cargue o escriba el código del producto al que desea agregar existencias.")
-        quantity = parse_int(self.view.get_stock(), minimum=1)
-        product = self.db.add_stock(code, quantity)
-        self.fill_form(product)
+            raise ValueError("Cargue o escriba el código del producto que desea ajustar.")
+        product = self.db.get_product(code)
+        if product is None:
+            messagebox.showinfo("Producto", f"No existe un producto activo con el código {code}.")
+            return
+        data = self.ask_form(
+            self.view,
+            f"Ajustar existencias de {product.name}",
+            [("quantity", "Cantidad (use signo menos para retirar, ej. -2)", ""), ("reason", "Motivo", "")],
+            intro=f"Existencias actuales: {product.stock}",
+            submit_text="Ajustar",
+        )
+        if data is None:
+            return
+        try:
+            quantity = int(data["quantity"].strip().replace(".", ""))
+        except ValueError as exc:
+            raise ValueError("La cantidad debe ser un número entero, por ejemplo 12 o -3.") from exc
+        reason = data["reason"].strip()
+        if not reason:
+            raise ValueError("Escriba el motivo del ajuste (pedido, conteo, daño, vencido...).")
+        updated = self.db.adjust_stock(code, quantity, reason)
+        self.fill_form(updated)
+        verb = "Se agregaron" if quantity > 0 else "Se retiraron"
         messagebox.showinfo(
             "Existencias actualizadas",
-            f"Se agregaron {quantity} unidades a '{product.name}'. Ahora hay {product.stock}.",
+            f"{verb} {abs(quantity)} unidades de '{updated.name}'. Ahora hay {updated.stock}.",
+        )
+
+    @guarded
+    def event_kardex(self) -> None:
+        code = self.view.get_code()
+        if not code:
+            raise ValueError("Cargue un producto para ver su kárdex.")
+        product = self.db.get_product(code)
+        if product is None:
+            messagebox.showinfo("Producto", f"No existe un producto activo con el código {code}.")
+            return
+        movements = self.db.get_stock_movements(code)
+        rows = [
+            (
+                m.created_at.strftime("%Y-%m-%d %H:%M"),
+                m.kind_label,
+                f"{m.quantity:+d}",
+                m.stock_after,
+                m.reference,
+                m.reason,
+                m.user or "",
+            )
+            for m in movements
+        ]
+        TableDialog(
+            self.view,
+            f"Kárdex de {product.name}",
+            KARDEX_COLUMNS,
+            rows,
+            subtitle=(
+                f"Existencias actuales: {product.stock}  ·  Costo: ${format_price(product.cost)}"
+                f"  ·  {len(rows)} movimientos"
+            ),
         )
 
     @guarded
@@ -148,6 +214,7 @@ class ProductManagementViewController:
         stock_text = self.view.get_stock()
         cost_text = self.view.get_cost()
         price_text = self.view.get_price()
+        min_stock_text = self.view.get_min_stock()
         return Product(
             code=code,
             name=name,
@@ -156,4 +223,6 @@ class ProductManagementViewController:
             stock=parse_int(stock_text, minimum=0) if stock_text else 0,
             category=category,
             description=self.view.get_description(),
+            min_stock=parse_int(min_stock_text, minimum=0) if min_stock_text else DEFAULT_MIN_STOCK,
+            tax_rate=Decimal(self.view.get_tax_rate() or "0"),
         )

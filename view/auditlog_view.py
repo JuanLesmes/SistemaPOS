@@ -1,4 +1,8 @@
-"""Registro de auditoría: eventos del día y detalle antes/después."""
+"""Registro de auditoría: eventos del día con color según el tipo de cambio y detalle antes/después.
+
+Verde: se creó o ingresó algo. Rojo: se eliminó, retiró o anuló. Amarillo: se
+modificó un dato. Blanco: ventas y turnos, que son movimiento normal.
+"""
 
 from __future__ import annotations
 
@@ -12,9 +16,10 @@ from view import theme
 from view.widgets import Card, HeaderBar, button, fill_table, make_table, section_label
 
 SUMMARY_COLUMNS = (
-    ("timestamp", "Fecha y hora", 160, "w", False),
+    ("timestamp", "Fecha y hora", 150, "w", False),
     ("action", "Acción", 190, "w"),
-    ("code", "Código", 140, "w", False),
+    ("code", "Código o recibo", 140, "w", False),
+    ("user", "Usuario", 110, "w", False),
 )
 DETAIL_COLUMNS = (
     ("field", "Campo", 130, "w", False),
@@ -24,23 +29,73 @@ DETAIL_COLUMNS = (
 
 ACTION_LABELS = {
     "add_product": "Producto creado",
+    "reactivate_product": "Producto reactivado",
     "modify_product": "Producto modificado",
     "deactivate_product": "Producto eliminado",
     "delete_product": "Producto eliminado",
-    "reactivate_product": "Producto reactivado",
+    "stock_in": "Existencias agregadas",
+    "stock_out": "Existencias retiradas",
     "update_stock": "Existencias ajustadas",
     "add_category": "Categoría creada",
     "delete_category": "Categoría eliminada",
+    "sale": "Venta",
+    "void_sale": "Venta anulada",
+    "sale_return": "Devolución",
+    "purchase": "Compra a proveedor",
+    "add_supplier": "Proveedor creado",
+    "modify_supplier": "Proveedor modificado",
+    "add_user": "Usuario creado",
+    "modify_user": "Usuario modificado",
+    "change_password": "Contraseña cambiada",
+    "shift_open": "Turno abierto",
+    "shift_close": "Turno cerrado",
+    "backup": "Copia de seguridad",
 }
+
+GREEN_ACTIONS = {
+    "add_product",
+    "reactivate_product",
+    "stock_in",
+    "add_category",
+    "purchase",
+    "add_supplier",
+    "add_user",
+}
+RED_ACTIONS = {"deactivate_product", "delete_product", "stock_out", "delete_category", "void_sale", "sale_return"}
+YELLOW_ACTIONS = {"modify_product", "modify_user", "change_password", "modify_supplier"}
 
 FIELD_LABELS = {
     "name": "Nombre",
     "cost": "Costo",
     "price": "Precio",
     "stock": "Existencias",
+    "min_stock": "Stock mínimo",
+    "tax_rate": "IVA %",
     "category": "Categoría",
     "description": "Descripción",
     "category_name": "Categoría",
+    "reason": "Motivo",
+    "motivo": "Motivo",
+    "recibo": "Recibo",
+    "total": "Total",
+    "pago": "Pago",
+    "productos": "Productos",
+    "devolucion": "Devolución",
+    "compra": "Compra",
+    "proveedor": "Proveedor",
+    "factura": "Factura",
+    "unidades": "Unidades",
+    "turno": "Turno",
+    "base": "Base inicial",
+    "esperado": "Efectivo esperado",
+    "contado": "Efectivo contado",
+    "diferencia": "Diferencia",
+    "username": "Usuario",
+    "full_name": "Nombre",
+    "role": "Rol",
+    "active": "Activo",
+    "nit": "NIT",
+    "archivo": "Archivo",
     "detalle": "Detalle",
 }
 
@@ -54,11 +109,11 @@ class AuditLogView(ctk.CTkFrame):
         self._build()
 
     def _build(self) -> None:
-        self.grid_columnconfigure(0, weight=2, uniform="panels")
-        self.grid_columnconfigure(1, weight=3, uniform="panels")
+        self.grid_columnconfigure(0, weight=3, uniform="panels")
+        self.grid_columnconfigure(1, weight=2, uniform="panels")
         self.grid_rowconfigure(2, weight=1)
 
-        header = HeaderBar(self, "Auditoría", "Cambios del catálogo registrados por día")
+        header = HeaderBar(self, "Auditoría", "Todo lo que cambió en el sistema, por día y por usuario")
         header.grid(row=0, column=0, columnspan=2, sticky="ew")
         header.add_action("Volver al menú", self.controller.event_back)
 
@@ -89,6 +144,7 @@ class AuditLogView(ctk.CTkFrame):
         )
         self.count_label = ctk.CTkLabel(body, text="", font=theme.font(12), text_color=theme.MUTED)
         self.count_label.pack(side="right")
+        self._legend(body).pack(side="right", padx=(0, 24))
 
         events = Card(self, "Eventos", padding=10)
         events.grid(row=2, column=0, sticky="nsew", padx=(16, 6), pady=(0, 16))
@@ -97,11 +153,26 @@ class AuditLogView(ctk.CTkFrame):
         self.tree = make_table(events_box, SUMMARY_COLUMNS, "Audit")
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
-        details = Card(self, "Cambios (antes y después)", padding=10)
+        details = Card(self, "Detalle (antes y después)", padding=10)
         details.grid(row=2, column=1, sticky="nsew", padx=(6, 16), pady=(0, 16))
         details_box = ctk.CTkFrame(details.body, fg_color="transparent")
         details_box.pack(fill="both", expand=True)
         self.details = make_table(details_box, DETAIL_COLUMNS, "AuditDetail")
+
+    @staticmethod
+    def _legend(parent) -> ctk.CTkFrame:
+        legend = ctk.CTkFrame(parent, fg_color="transparent")
+        for color, text in (
+            (theme.SUCCESS_SOFT, "Creó o ingresó"),
+            (theme.DANGER_SOFT, "Eliminó, retiró o anuló"),
+            (theme.WARNING_SOFT, "Modificó"),
+            (theme.SURFACE, "Ventas y turnos"),
+        ):
+            ctk.CTkFrame(
+                legend, fg_color=color, width=16, height=16, corner_radius=4, border_width=1, border_color=theme.BORDER
+            ).pack(side="left", padx=(10, 4))
+            ctk.CTkLabel(legend, text=text, font=theme.font(11), text_color=theme.MUTED).pack(side="left")
+        return legend
 
     # ------------------------------------------------------------------ API para el controlador
     def set_date(self, day: dt.date) -> None:
@@ -116,9 +187,12 @@ class AuditLogView(ctk.CTkFrame):
                     entry.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                     ACTION_LABELS.get(entry.action, entry.action),
                     entry.code or "",
+                    entry.user or "",
+                    entry.action,
                 )
                 for entry in self._entries
             ),
+            extra_tags=lambda row: _color_tag(row[4]),
             empty_message="No hay eventos en esta fecha",
         )
         self.count_label.configure(text=f"{len(self._entries)} eventos")
@@ -149,3 +223,13 @@ class AuditLogView(ctk.CTkFrame):
             ),
             empty_message="Sin detalle",
         )
+
+
+def _color_tag(action: str) -> tuple[str, ...]:
+    if action in GREEN_ACTIONS:
+        return ("ok",)
+    if action in RED_ACTIONS:
+        return ("bad",)
+    if action in YELLOW_ACTIONS:
+        return ("warn",)
+    return ()

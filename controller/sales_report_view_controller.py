@@ -11,8 +11,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from controller.common import guarded
+from model import permissions
 from model.db_connection import DBConnection
 from model.report import SalesReportRow, SalesTotals, rows_from_receipts, totals_from_receipts
+from utils.formatters import format_price
+from view.dialogs import ask_form
+from view.return_dialog import ask_return
 from view.sales_report_view import SalesReportView
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,8 @@ class SalesReportViewController:
         self.rows: list[SalesReportRow] = []
         self.totals: SalesTotals | None = None
         self.view = SalesReportView(parent, self)
+        self.ask_form = ask_form  # reemplazables en pruebas
+        self.ask_return = ask_return
         self.view.load_table([])
 
     def event_back(self) -> None:
@@ -44,6 +50,59 @@ class SalesReportViewController:
 
     def event_dashboard(self) -> None:
         self.main_controller.show_dashboard_view()
+
+    @guarded
+    def event_void(self) -> None:
+        row = self._selected_receipt_row()
+        if row is None:
+            return
+        data = self.ask_form(
+            self.view,
+            f"Anular el recibo {row.receipt_id}",
+            [("reason", "Motivo de la anulación", "")],
+            intro="Todas las unidades vuelven al inventario y la venta deja de contar en los reportes.",
+            submit_text="Anular",
+        )
+        if data is None:
+            return
+        self.db.void_receipt(row.receipt_id, data["reason"])
+        self.event_search()
+        messagebox.showinfo("Venta anulada", f"El recibo {row.receipt_id} quedó anulado.")
+
+    @guarded
+    def event_return(self) -> None:
+        row = self._selected_receipt_row()
+        if row is None:
+            return
+        receipt = self.db.get_receipt(row.receipt_id)
+        if receipt is None or receipt.is_voided:
+            raise ValueError("Ese recibo no existe o está anulado.")
+        result = self.ask_return(self.view, receipt, self.db.returned_quantities(receipt.id))
+        if result is None:
+            return
+        items, reason = result
+        if any(qty < 0 for _code, qty in items):
+            raise ValueError("Las cantidades a devolver deben ser números enteros.")
+        sale_return = self.db.add_return(receipt.id, items, reason)
+        self.event_search()
+        messagebox.showinfo(
+            "Devolución registrada",
+            f"Se devolvieron ${format_price(sale_return.total)} del recibo {receipt.id}. "
+            "Las unidades volvieron al inventario.",
+        )
+
+    def _selected_receipt_row(self):
+        if not self.main_controller.has_permission(permissions.VOID_SALE):
+            messagebox.showwarning("Sin permiso", "Solo un supervisor o administrador puede anular o devolver ventas.")
+            return None
+        row = self.view.selected_row()
+        if row is None:
+            messagebox.showwarning("Seleccione una venta", "Seleccione en la tabla una fila del recibo.")
+            return None
+        if row.voided:
+            messagebox.showinfo("Recibo anulado", f"El recibo {row.receipt_id} ya está anulado.")
+            return None
+        return row
 
     @guarded
     def event_quick_range(self, key: str) -> None:

@@ -36,7 +36,11 @@ class AdminView(ctk.CTkFrame):
 
         self.header = HeaderBar(self, "Inventario", "Productos activos y valor de las existencias")
         self.header.grid(row=0, column=0, sticky="ew")
-        self.header.add_action("Gestionar productos", self.controller.event_manage_products, kind="accent")
+        self.manage_button = self.header.add_action(
+            "Gestionar productos", self.controller.event_manage_products, kind="accent"
+        )
+        self.import_button = self.header.add_action("Importar Excel", self.controller.event_import_excel)
+        self.header.add_action("Exportar Excel", self.controller.event_export_excel)
         self.header.add_action("Volver al menú", self.controller.event_back)
 
         stats = ctk.CTkFrame(self, fg_color="transparent")
@@ -130,10 +134,19 @@ class AdminView(ctk.CTkFrame):
         fill_table(
             self.tree,
             (
-                (p.code, p.name, p.category, p.stock, format_price(p.cost), format_price(p.price), p.description)
+                (
+                    p.code,
+                    p.name,
+                    p.category,
+                    p.stock,
+                    format_price(p.cost),
+                    format_price(p.price),
+                    p.description,
+                    p.min_stock,
+                )
                 for p in products
             ),
-            extra_tags=lambda row: stock_tag(int(row[3])),
+            extra_tags=lambda row: stock_tag(int(row[3]), int(row[7])),
             empty_message="No hay productos que coincidan",
         )
 
@@ -151,6 +164,11 @@ class AdminView(ctk.CTkFrame):
         self.stat_cards["low"].set_value(str(stats.low_stock_count))
         self.stat_cards["out"].set_value(str(stats.out_of_stock_count))
         self.header.set_subtitle(f"{stats.product_count} productos activos")
+
+    def set_can_edit(self, can_edit: bool) -> None:
+        state = "normal" if can_edit else "disabled"
+        self.manage_button.configure(state=state)
+        self.import_button.configure(state=state)
 
     def set_stock_filter(self, key: str | None) -> None:
         self.stat_cards["low"].set_active(key == "low")

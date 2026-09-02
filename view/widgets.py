@@ -71,7 +71,8 @@ class HeaderBar(ctk.CTkFrame):
             titles, text=subtitle, font=theme.font(12), text_color=theme.ON_DARK_MUTED, anchor="w"
         )
         self.subtitle_label.pack(anchor="w")
-        self.actions = ctk.CTkFrame(self, fg_color="transparent")
+        # Tamaño explícito: sin botones, un CTkFrame vacío pediría 200 px y empujaría el título fuera de la barra.
+        self.actions = ctk.CTkFrame(self, fg_color="transparent", width=8, height=38)
         self.actions.grid(row=0, column=2, sticky="e", padx=16)
 
     def set_subtitle(self, text: str) -> None:
@@ -206,11 +207,16 @@ def make_table(
         tree.column(key, width=width, minwidth=40, anchor=anchor, stretch=stretch)
     scrollbar = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=scrollbar.set)
-    tree.tag_configure("even", background=theme.SURFACE)
-    tree.tag_configure("odd", background=theme.ZEBRA)
+    # Cuando una fila tiene varias etiquetas, ttk usa la que se configuró PRIMERO:
+    # los colores semánticos van antes que la cebra para que sí se vean.
     tree.tag_configure("low", background=theme.WARNING_SOFT)
     tree.tag_configure("out", background=theme.DANGER_SOFT, foreground=theme.DANGER)
     tree.tag_configure("muted", foreground=theme.MUTED)
+    tree.tag_configure("ok", background=theme.SUCCESS_SOFT)
+    tree.tag_configure("bad", background=theme.DANGER_SOFT)
+    tree.tag_configure("warn", background=theme.WARNING_SOFT)
+    tree.tag_configure("even", background=theme.SURFACE)
+    tree.tag_configure("odd", background=theme.ZEBRA)
     tree.grid(row=0, column=0, sticky="nsew")
     scrollbar.grid(row=0, column=1, sticky="ns")
     parent.grid_rowconfigure(0, weight=1)
@@ -231,7 +237,7 @@ def fill_table(
         tags = ("odd" if index % 2 else "even",)
         if extra_tags is not None:
             tags = tags + extra_tags(row)
-        tree.insert("", "end", values=tuple(row), tags=tags)
+        tree.insert("", "end", values=tuple(row)[: len(tree["columns"])], tags=tags)
         count += 1
     if count == 0 and empty_message:
         columns = list(tree["columns"])
@@ -243,7 +249,9 @@ def fill_table(
 
 
 def section_label(parent, text: str) -> ctk.CTkLabel:
-    return ctk.CTkLabel(parent, text=text, font=theme.font(12, bold=True), text_color=theme.MUTED, anchor="w")
+    return ctk.CTkLabel(
+        parent, text=text, font=theme.font(12, bold=True), text_color=theme.MUTED, anchor="w", height=20
+    )
 
 
 def clear_entry(entry: ctk.CTkEntry) -> None:

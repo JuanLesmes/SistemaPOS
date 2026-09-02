@@ -1,7 +1,7 @@
 """Venta en curso o en espera dentro de la caja.
 
-Permite atender varios clientes a la vez: cada venta guarda sus productos, el
-monto recibido y si el cliente quiere recibo, para retomarla tal cual.
+Permite atender varios clientes a la vez: cada venta guarda sus productos, sus
+descuentos, el monto recibido y si el cliente quiere recibo, para retomarla tal cual.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from decimal import Decimal
 
 from model.sold_product import SoldProduct
 
+ZERO = Decimal(0)
+
 
 @dataclass
 class PendingSale:
@@ -18,19 +20,28 @@ class PendingSale:
     lines: list[SoldProduct] = field(default_factory=list)
     received_text: str = ""
     wants_receipt: bool = False
+    discount_total: Decimal = ZERO  # descuento sobre toda la venta
     db_id: int | None = None  # id en la tabla pending_sales cuando ya está guardada
 
     @property
-    def is_empty(self) -> bool:
-        return not self.lines and not self.received_text and not self.wants_receipt
+    def gross(self) -> Decimal:
+        return sum((sp.total for sp in self.lines), ZERO)
 
     @property
     def total(self) -> Decimal:
-        return sum((sp.total for sp in self.lines), Decimal(0))
+        return max(self.gross - self.discount_total, ZERO)
+
+    @property
+    def line_discounts(self) -> Decimal:
+        return sum((sp.discount for sp in self.lines), ZERO)
 
     @property
     def item_count(self) -> int:
         return sum(sp.quantity for sp in self.lines)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.lines and not self.received_text and not self.wants_receipt
 
     def quantity_of(self, code: str) -> int:
         return sum(sp.quantity for sp in self.lines if sp.code == code)

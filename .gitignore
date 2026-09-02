@@ -23,3 +23,6 @@ logs/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+# Copias de seguridad generadas por la aplicacion
+backups/

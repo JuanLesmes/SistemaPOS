@@ -67,3 +67,17 @@ def test_environment_overrides_are_not_required(tmp_path):
     assert settings.database.port == 5432
     assert settings.business.name == "Mi Tienda"
     assert os.getenv("DB_PASSWORD") == "x"
+
+
+def test_backup_section_has_defaults_and_overrides(tmp_path):
+    write_files(tmp_path, "DB_PASSWORD=x\n", {})
+    defaults = load_settings(tmp_path).backup
+    assert defaults.enabled is True
+    assert defaults.directory == "backups"
+    assert defaults.keep == 30
+
+    write_files(tmp_path, "DB_PASSWORD=x\n", {"backup": {"enabled": False, "directory": "D:/copias", "keep": 7}})
+    custom = load_settings(tmp_path).backup
+    assert custom.enabled is False
+    assert custom.directory == "D:/copias"
+    assert custom.keep == 7

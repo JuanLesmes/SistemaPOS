@@ -1,8 +1,9 @@
-"""Pantalla de ventas: catálogo, lectura de códigos, cola de ventas y cobro.
+"""Pantalla de ventas: catálogo, lectura de códigos, cola de ventas, descuentos y cobro.
 
 La caja puede tener varias ventas abiertas (un cliente con afán, otro
 indeciso). Solo una está activa; las demás esperan con sus productos y su
-monto recibido intactos hasta que el cajero las retoma.
+monto recibido intactos hasta que el cajero las retoma. Toda venta se
+registra dentro del turno de caja abierto.
 """
 
 from __future__ import annotations
@@ -11,30 +12,48 @@ import logging
 import queue
 import threading
 import tkinter as tk
-from decimal import Decimal
+from collections.abc import Callable
+from decimal import ROUND_HALF_UP, Decimal
 from tkinter import messagebox
 
 from controller.common import guarded
+from model import permissions
 from model.db_connection import DBConnection
 from model.errors import AppError, PrinterError
 from model.pending_sale import PendingSale
 from model.product import Product
-from model.receipt import PAYMENT_CARD, PAYMENT_CASH, PAYMENT_TRANSFER, Receipt
+from model.receipt import (
+    PAYMENT_CARD,
+    PAYMENT_CASH,
+    PAYMENT_METHODS,
+    PAYMENT_MIXED,
+    PAYMENT_TRANSFER,
+    Payment,
+    Receipt,
+)
+from model.shift import Shift, ShiftSummary
 from model.sold_product import SoldProduct
 from utils.barcode_reader import BarcodeReader
 from utils.formatters import format_money_input, format_price, parse_money
 from utils.printer_manager import ReceiptPrinter
+from view.dialogs import ask_form
 from view.sales_view import ALL_CATEGORIES, BEST_SELLERS, SalesView
 from view.widgets import Keypad
 
 logger = logging.getLogger(__name__)
 
 PRINT_POLL_MS = 250
-PRINT_THREAD_PREFIX = "print-receipt-"
+PRINT_THREAD_PREFIX = "printer-job-"
 PAGE_SIZE = 60
 SEARCH_DEBOUNCE_MS = 250
 BEST_SELLER_DAYS = 30
 MAX_PENDING_SALES = 8
+ZERO = Decimal(0)
+
+SCOPE_LINE = "Línea seleccionada"
+SCOPE_SALE = "Toda la venta"
+MODE_PERCENT = "Porcentaje"
+MODE_AMOUNT = "Valor en pesos"
 
 
 class SalesViewController:
@@ -44,7 +63,9 @@ class SalesViewController:
         self.sales: list[PendingSale] = self._load_pending_sales()
         self._next_number = max((sale.number for sale in self.sales), default=0) + 1
         self.active: PendingSale = self.sales[0] if self.sales else self._create_sale()
+        self.shift: Shift | None = None
         self.view = SalesView(parent, self)
+        self.ask_form = ask_form  # reemplazable en pruebas
 
         settings = main_controller.settings
         self.printer = ReceiptPrinter(settings.printer, settings.business)
@@ -72,23 +93,41 @@ class SalesViewController:
         return sales
 
     # ------------------------------------------------------------------ ciclo de vida
-    def on_show(self) -> None:
-        """Las ventas en espera se conservan al salir y volver a la pantalla."""
+    def on_show(self) -> bool:
+        """Prepara la pantalla. Devuelve False si no hay turno abierto y el cajero no abrió uno."""
+        if not self._ensure_shift():
+            return False
         self.refresh_catalog()
         self._refresh()
         self.reader.enable()
         self.view.focus_set()
+        return True
 
     def on_hide(self) -> None:
         self.reader.disable()
         self._store_active_inputs()
         self._persist(self.active)
 
-    @guarded
-    def refresh_catalog(self) -> None:
-        self.view.set_categories(self.db.get_categories())
-        self.view.clear_search()
-        self._show_category(self._category)
+    # ------------------------------------------------------------------ turno de caja
+    def _ensure_shift(self) -> bool:
+        self.shift = self.db.get_open_shift()
+        if self.shift is None:
+            self.shift = self.main_controller.shift_controller.open_shift_interactively()
+        if self.shift is None:
+            messagebox.showwarning("Turno de caja", "Para vender hay que abrir un turno con la base inicial.")
+            return False
+        opened = self.shift.opened_at.strftime("%H:%M")
+        self.view.set_shift_text(
+            f"Turno {self.shift.id} abierto a las {opened} por {self.shift.opened_by or '-'}  ·  "
+            f"base ${format_price(self.shift.opening_cash)}"
+        )
+        return True
+
+    def event_shift(self) -> None:
+        self.main_controller.show_shift_view()
+
+    def print_shift_close(self, summary: ShiftSummary, shift: Shift) -> None:
+        self._run_print_job(f"cierre-{shift.id}", lambda: self.printer.print_shift_close(summary, shift))
 
     # ------------------------------------------------------------------ cola de ventas
     def _create_sale(self) -> PendingSale:
@@ -196,6 +235,12 @@ class SalesViewController:
             note = f"{len(products)} productos"
         self.view.show_products(shown, note)
 
+    @guarded
+    def refresh_catalog(self) -> None:
+        self.view.set_categories(self.db.get_categories())
+        self.view.clear_search()
+        self._show_category(self._category)
+
     def event_search_changed(self) -> None:
         """Espera a que el usuario deje de escribir antes de consultar."""
         if self._search_job is not None:
@@ -298,6 +343,7 @@ class SalesViewController:
         line = self.lines[index]
         if line.quantity > 1:
             line.quantity -= 1
+            line.discount = min(line.discount, line.gross)
         else:
             del self.lines[index]
         self._refresh()
@@ -311,6 +357,41 @@ class SalesViewController:
         del self.lines[index]
         self._refresh()
         self.view.select_index(min(index, len(self.lines) - 1))
+
+    @guarded
+    def event_discount(self) -> None:
+        if not self.main_controller.has_permission(permissions.DISCOUNT):
+            messagebox.showwarning("Sin permiso", "Solo un supervisor o administrador puede aplicar descuentos.")
+            return
+        if not self.lines:
+            self._warn_empty_sale()
+            return
+        selected = self.view.selected_index()
+        data = self.ask_form(
+            self.view,
+            "Aplicar descuento",
+            [
+                ("scope", "Aplicar a", SCOPE_LINE if selected is not None else SCOPE_SALE, (SCOPE_LINE, SCOPE_SALE)),
+                ("mode", "Tipo", MODE_PERCENT, (MODE_PERCENT, MODE_AMOUNT)),
+                ("value", "Valor (porcentaje o pesos). 0 quita el descuento", ""),
+            ],
+            intro=f"Total actual de la venta: ${format_price(self.total())}",
+            submit_text="Aplicar",
+        )
+        if data is None:
+            return
+        value = parse_money(data["value"]) if data["value"].strip() else ZERO
+        if data["scope"] == SCOPE_LINE:
+            if selected is None or selected >= len(self.lines):
+                raise ValueError("Seleccione en la tabla la línea a la que aplica el descuento.")
+            line = self.lines[selected]
+            amount = _discount_amount(line.gross, data["mode"], value)
+            line.discount = amount
+        else:
+            self.active.discount_total = _discount_amount(self.active.gross, data["mode"], value)
+        self._refresh()
+        if selected is not None:
+            self.view.select_index(selected)
 
     def _selected_line_index(self) -> int | None:
         if not self.lines:
@@ -370,6 +451,32 @@ class SalesViewController:
     def event_transfer_payment(self) -> None:
         self._checkout(PAYMENT_TRANSFER)
 
+    @guarded
+    def event_mixed_payment(self) -> None:
+        if not self.lines:
+            self._warn_empty_sale()
+            return
+        total = self.total()
+        data = self.ask_form(
+            self.view,
+            "Pago mixto",
+            [
+                (method, method, format_money_input(total) if method == PAYMENT_CASH else "")
+                for method in PAYMENT_METHODS
+            ],
+            intro=f"Reparta el total de ${format_price(total)} entre los métodos de pago.",
+            submit_text="Cobrar",
+        )
+        if data is None:
+            return
+        payments = [
+            Payment(method, parse_money(data[method]) if data[method].strip() else ZERO) for method in PAYMENT_METHODS
+        ]
+        paid = sum((p.amount for p in payments), ZERO)
+        if paid != total:
+            raise ValueError(f"Los pagos suman ${format_price(paid)} y la venta vale ${format_price(total)}.")
+        self._checkout(PAYMENT_MIXED, payments=payments)
+
     def event_back(self) -> None:
         self.main_controller.show_menu()
 
@@ -381,7 +488,7 @@ class SalesViewController:
         try:
             return parse_money(self.view.get_received_amount())
         except ValueError:
-            return Decimal(0)
+            return ZERO
 
     def _update_change(self) -> None:
         text = self.view.get_received_amount()
@@ -401,6 +508,7 @@ class SalesViewController:
 
     def _refresh(self) -> None:
         self.view.load_table(self.lines)
+        self.view.set_discount(self.active.line_discounts, self.active.discount_total)
         self.view.set_total(self.total())
         self.view.show_queue(self.sales, self.active.number)
         self._update_change()
@@ -410,13 +518,27 @@ class SalesViewController:
     def _warn_empty_sale(self) -> None:
         messagebox.showwarning("Venta vacía", "Agregue productos antes de cobrar.")
 
-    def _checkout(self, payment_method: str, received: Decimal | None = None) -> None:
+    def _checkout(
+        self, payment_method: str, received: Decimal | None = None, payments: list[Payment] | None = None
+    ) -> None:
         if not self.lines:
             self._warn_empty_sale()
             return
-        receipt = Receipt.create(payment_method, self.lines)
+        if self.shift is None and not self._ensure_shift():
+            return
+        receipt = Receipt.create(
+            payment_method,
+            self.lines,
+            discount_total=self.active.discount_total,
+            payments=payments,
+            shift_id=self.shift.id if self.shift else None,
+        )
+        user = self.main_controller.current_user
+        receipt.cashier = user.username if user is not None else None
         receipt.id = self.db.add_receipt(receipt)
-        change = received - receipt.total if received is not None else Decimal(0)
+        change = received - receipt.total if received is not None else ZERO
+        if receipt.paid_with(PAYMENT_CASH) > 0 and self.printer.drawer_enabled:
+            self._run_print_job(f"cajon-{receipt.id}", self.printer.open_drawer)
         if self.view.wants_receipt():
             self._print_in_background(receipt, received, change)
         self._close_active()
@@ -428,17 +550,19 @@ class SalesViewController:
         """Imprime en un hilo aparte para que la caja nunca se congele esperando la impresora."""
         if not self.printer.enabled:
             return
+        self._run_print_job(f"recibo-{receipt.id}", lambda: self.printer.print_receipt(receipt, received, change))
 
-        def job() -> None:
+    def _run_print_job(self, name: str, job: Callable[[], None]) -> None:
+        def run() -> None:
             try:
-                self.printer.print_receipt(receipt, received, change)
+                job()
             except PrinterError as exc:
                 self._print_errors.put(str(exc))
             except Exception:
-                logger.exception("Error inesperado imprimiendo el recibo %s", receipt.id)
+                logger.exception("Error inesperado en la impresora (%s)", name)
                 self._print_errors.put("Error inesperado al imprimir. Revise logs/app.log.")
 
-        threading.Thread(target=job, name=f"{PRINT_THREAD_PREFIX}{receipt.id}", daemon=True).start()
+        threading.Thread(target=run, name=f"{PRINT_THREAD_PREFIX}{name}", daemon=True).start()
         if not self._polling_printer:
             self._polling_printer = True
             self.view.after(PRINT_POLL_MS, self._poll_print_errors)
@@ -460,3 +584,18 @@ class SalesViewController:
             except queue.Empty:
                 return
             messagebox.showwarning("Impresión", f"{message}\nLa venta quedó registrada.")
+
+
+def _discount_amount(base: Decimal, mode: str, value: Decimal) -> Decimal:
+    """Convierte el valor del diálogo en pesos de descuento, acotado al valor base."""
+    if value < 0:
+        raise ValueError("El descuento no puede ser negativo.")
+    if mode == MODE_PERCENT:
+        if value > 100:
+            raise ValueError("El porcentaje no puede ser mayor que 100.")
+        amount = (base * value / 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    else:
+        amount = value
+    if amount > base:
+        raise ValueError(f"El descuento no puede superar ${format_price(base)}.")
+    return amount
