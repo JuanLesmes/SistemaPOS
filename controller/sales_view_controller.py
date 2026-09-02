@@ -1,4 +1,9 @@
-"""Pantalla de ventas: catálogo, lectura de códigos, armado de la venta y cobro."""
+"""Pantalla de ventas: catálogo, lectura de códigos, cola de ventas y cobro.
+
+La caja puede tener varias ventas abiertas (un cliente con afán, otro
+indeciso). Solo una está activa; las demás esperan con sus productos y su
+monto recibido intactos hasta que el cajero las retoma.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +17,7 @@ from tkinter import messagebox
 from controller.common import guarded
 from model.db_connection import DBConnection
 from model.errors import PrinterError
+from model.pending_sale import PendingSale
 from model.product import Product
 from model.receipt import PAYMENT_CARD, PAYMENT_CASH, PAYMENT_TRANSFER, Receipt
 from model.sold_product import SoldProduct
@@ -28,13 +34,16 @@ PRINT_THREAD_PREFIX = "print-receipt-"
 PAGE_SIZE = 60
 SEARCH_DEBOUNCE_MS = 250
 BEST_SELLER_DAYS = 30
+MAX_PENDING_SALES = 8
 
 
 class SalesViewController:
     def __init__(self, parent: tk.Frame, main_controller, db: DBConnection) -> None:
         self.main_controller = main_controller
         self.db = db
-        self.lines: list[SoldProduct] = []
+        self.sales: list[PendingSale] = []
+        self._next_number = 1
+        self.active: PendingSale = self._create_sale()
         self.view = SalesView(parent, self)
 
         settings = main_controller.settings
@@ -46,29 +55,85 @@ class SalesViewController:
         self._category = ALL_CATEGORIES
         self._search_job: str | None = None
         self.refresh_catalog()
-        self.reset_sale()
+        self._refresh()
+
+    @property
+    def lines(self) -> list[SoldProduct]:
+        return self.active.lines
 
     # ------------------------------------------------------------------ ciclo de vida
     def on_show(self) -> None:
-        self.reset_sale()
+        """Las ventas en espera se conservan al salir y volver a la pantalla."""
         self.refresh_catalog()
+        self._refresh()
         self.reader.enable()
         self.view.focus_set()
 
     def on_hide(self) -> None:
         self.reader.disable()
 
-    def reset_sale(self) -> None:
-        self.lines.clear()
-        self.view.clear_received_amount()
-        self.view.reset_print_option()
-        self._refresh()
-
     @guarded
     def refresh_catalog(self) -> None:
         self.view.set_categories(self.db.get_categories())
         self.view.clear_search()
         self._show_category(self._category)
+
+    # ------------------------------------------------------------------ cola de ventas
+    def _create_sale(self) -> PendingSale:
+        sale = PendingSale(number=self._next_number)
+        self._next_number += 1
+        self.sales.append(sale)
+        return sale
+
+    def _activate(self, sale: PendingSale) -> None:
+        self.active = sale
+        self.view.set_received_amount(sale.received_text)
+        self.view.print_var.set(sale.wants_receipt)
+        self._refresh()
+
+    def _store_active_inputs(self) -> None:
+        self.active.received_text = self.view.get_received_amount()
+        self.active.wants_receipt = bool(self.view.print_var.get())
+
+    def _close_active(self) -> None:
+        """Saca la venta activa de la cola y pasa a la más antigua en espera, o a una nueva."""
+        self.sales.remove(self.active)
+        self._activate(self.sales[0] if self.sales else self._create_sale())
+
+    @guarded
+    def event_new_sale(self) -> None:
+        if len(self.sales) >= MAX_PENDING_SALES:
+            messagebox.showwarning(
+                "Cola llena", f"Ya hay {MAX_PENDING_SALES} ventas abiertas. Cobre o cancele alguna antes de abrir otra."
+            )
+            return
+        self._store_active_inputs()
+        self._activate(self._create_sale())
+        self.view.focus_set()
+
+    @guarded
+    def event_switch_sale(self, number: int) -> None:
+        if number == self.active.number:
+            return
+        target = next((sale for sale in self.sales if sale.number == number), None)
+        if target is None:
+            return
+        self._store_active_inputs()
+        self._activate(target)
+        self.view.focus_set()
+
+    @guarded
+    def event_cancel_sale(self) -> None:
+        """Cancela la venta activa. Si es la única, simplemente la deja vacía."""
+        if self.lines and not messagebox.askyesno(
+            "Cancelar venta", f"¿Cancelar la venta {self.active.number} con {self.active.item_count} productos?"
+        ):
+            return
+        self._close_active()
+
+    def _reserved_elsewhere(self, code: str) -> int:
+        """Unidades del producto que ya están en otras ventas en espera."""
+        return sum(sale.quantity_of(code) for sale in self.sales if sale is not self.active)
 
     # ------------------------------------------------------------------ catálogo
     @guarded
@@ -151,15 +216,12 @@ class SalesViewController:
             return
         self.add_line(product)
 
-    # ------------------------------------------------------------------ venta actual
+    # ------------------------------------------------------------------ venta activa
     def add_line(self, product: Product, quantity: int = 1) -> None:
         """Agrega unidades de un producto; si ya está en la venta, suma a esa línea."""
         existing = next((sp for sp in self.lines if sp.code == product.code), None)
         wanted = quantity + (existing.quantity if existing else 0)
-        if wanted > product.stock:
-            messagebox.showwarning(
-                "Sin existencias", f"'{product.name}' solo tiene {product.stock} unidades disponibles."
-            )
+        if not self._stock_allows(product, wanted):
             return
         if existing is not None:
             existing.quantity = wanted
@@ -168,6 +230,21 @@ class SalesViewController:
         self._refresh()
         self.view.select_index(self.lines.index(existing) if existing is not None else len(self.lines) - 1)
 
+    def _stock_allows(self, product: Product, wanted: int) -> bool:
+        reserved = self._reserved_elsewhere(product.code)
+        if wanted + reserved <= product.stock:
+            return True
+        if reserved:
+            messagebox.showwarning(
+                "Sin existencias",
+                f"'{product.name}' tiene {product.stock} unidades y {reserved} ya están en otra venta en espera.",
+            )
+        else:
+            messagebox.showwarning(
+                "Sin existencias", f"'{product.name}' solo tiene {product.stock} unidades disponibles."
+            )
+        return False
+
     @guarded
     def event_increase(self) -> None:
         index = self._selected_line_index()
@@ -175,9 +252,7 @@ class SalesViewController:
             return
         line = self.lines[index]
         fresh = self.db.get_product(line.code)
-        available = fresh.stock if fresh is not None else 0
-        if line.quantity + 1 > available:
-            messagebox.showwarning("Sin existencias", f"'{line.product.name}' solo tiene {available} unidades.")
+        if fresh is None or not self._stock_allows(fresh, line.quantity + 1):
             return
         line.quantity += 1
         self._refresh()
@@ -204,13 +279,6 @@ class SalesViewController:
         del self.lines[index]
         self._refresh()
         self.view.select_index(min(index, len(self.lines) - 1))
-
-    @guarded
-    def event_clear_sale(self) -> None:
-        if not self.lines:
-            return
-        if messagebox.askyesno("Vaciar venta", "¿Quitar todos los productos de la venta actual?"):
-            self.reset_sale()
 
     def _selected_line_index(self) -> int | None:
         if not self.lines:
@@ -275,7 +343,7 @@ class SalesViewController:
 
     # ------------------------------------------------------------------ apoyo
     def total(self) -> Decimal:
-        return sum((sp.total for sp in self.lines), Decimal(0))
+        return self.active.total
 
     def _received_or_zero(self) -> Decimal:
         try:
@@ -302,6 +370,7 @@ class SalesViewController:
     def _refresh(self) -> None:
         self.view.load_table(self.lines)
         self.view.set_total(self.total())
+        self.view.show_queue(self.sales, self.active.number)
         self._update_change()
 
     def _warn_empty_sale(self) -> None:
@@ -314,10 +383,9 @@ class SalesViewController:
         receipt = Receipt.create(payment_method, self.lines)
         receipt.id = self.db.add_receipt(receipt)
         change = received - receipt.total if received is not None else Decimal(0)
-        wants_print = self.view.wants_receipt()
-        if wants_print:
+        if self.view.wants_receipt():
             self._print_in_background(receipt, received, change)
-        self.reset_sale()
+        self._close_active()
         self._show_category(self._category)
         on_print = (lambda: self._print_in_background(receipt, received, change)) if self.printer.enabled else None
         self.main_controller.show_voucher_view(receipt, received, change, on_print)

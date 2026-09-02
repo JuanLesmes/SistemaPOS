@@ -104,23 +104,58 @@ class Card(ctk.CTkFrame):
 
 
 class StatCard(ctk.CTkFrame):
-    """Indicador con etiqueta y valor grande, con una franja de color a la izquierda."""
+    """Indicador con etiqueta y valor grande, con una franja de color a la izquierda.
+
+    Con ``set_command`` se vuelve clicable y con ``set_active`` se resalta como filtro activo.
+    """
 
     def __init__(self, parent, label: str, value: str = "", accent: str = theme.PRIMARY) -> None:
         super().__init__(parent, fg_color=theme.SURFACE, corner_radius=14, border_width=1, border_color=theme.BORDER)
+        self._accent = accent
+        self._command: Callable[[], None] | None = None
         # Altura explícita: un CTkFrame sin altura pide 200 px y estiraría la tarjeta.
         stripe = ctk.CTkFrame(self, fg_color=accent, width=6, height=44, corner_radius=3)
         stripe.pack(side="left", fill="y", padx=(12, 0), pady=12)
         box = ctk.CTkFrame(self, fg_color="transparent")
         box.pack(side="left", fill="both", expand=True, padx=12, pady=10)
-        ctk.CTkLabel(box, text=label, font=theme.font(12), text_color=theme.MUTED, anchor="w").pack(anchor="w")
+        self.label = ctk.CTkLabel(box, text=label, font=theme.font(12), text_color=theme.MUTED, anchor="w")
+        self.label.pack(anchor="w")
         self.value_label = ctk.CTkLabel(
             box, text=value, font=theme.font(20, bold=True), text_color=theme.TEXT, anchor="w"
         )
         self.value_label.pack(anchor="w")
+        self._widgets = (self, stripe, box, self.label, self.value_label)
 
     def set_value(self, text: str) -> None:
         self.value_label.configure(text=text)
+
+    def set_note(self, text: str, color: str = theme.MUTED) -> None:
+        """Línea pequeña bajo el valor, por ejemplo la variación frente al período anterior."""
+        if not hasattr(self, "note_label"):
+            self.note_label = ctk.CTkLabel(
+                self.value_label.master, text="", font=theme.font(11, bold=True), text_color=color, anchor="w"
+            )
+            self.note_label.pack(anchor="w")
+            self._widgets = (*self._widgets, self.note_label)
+            if self._command is not None:
+                self.set_command(self._command)
+        self.note_label.configure(text=text, text_color=color)
+
+    def set_command(self, command: Callable[[], None]) -> None:
+        self._command = command
+        for widget in self._widgets:
+            widget.configure(cursor="hand2")
+            widget.bind("<Button-1>", lambda _event: command())
+            widget.bind("<Enter>", lambda _event: self.configure(fg_color=theme.SURFACE_HOVER))
+            widget.bind("<Leave>", self._on_leave)
+
+    def set_active(self, active: bool) -> None:
+        self.configure(border_color=self._accent if active else theme.BORDER, border_width=2 if active else 1)
+
+    def _on_leave(self, event) -> None:
+        under = self.winfo_containing(event.x_root, event.y_root)
+        if under is None or not str(under).startswith(str(self)):
+            self.configure(fg_color=theme.SURFACE)
 
 
 class Keypad(ctk.CTkFrame):

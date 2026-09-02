@@ -227,6 +227,25 @@ def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     sales.event_select_category("__mas_vendidos__")
     assert [card.product.code for card in sales_view._cards] == ["A1"]
 
+    # Cola de ventas: dos clientes a la vez, con existencias apartadas entre ventas.
+    sales.on_barcode("A1")  # venta en curso con 1 unidad (quedan 2 en stock)
+    first = sales.active.number
+    sales.event_new_sale()
+    assert len(sales.sales) == 2 and sales.active.number != first and sales.lines == []
+    sales.on_barcode("A1")
+    sales.on_barcode("A1")  # la segunda unidad ya está apartada en la otra venta
+    assert [sp.quantity for sp in sales.lines] == [1]
+    assert "otra venta" in dialogs[-1][1]
+    sales.event_switch_sale(first)
+    assert sales.active.number == first and [sp.quantity for sp in sales.lines] == [1]
+    sales.event_cancel_sale()  # askyesno devuelve True
+    assert len(sales.sales) == 1 and sales.active.number != first
+    assert sales_view.cart_title.cget("text") == f"Venta {sales.active.number}"
+    sales.event_card_payment()
+    root.update()
+    close_toplevels(root)
+    assert len(db.receipts) == 3 and len(sales.sales) == 1 and sales.lines == []
+
     # ---------------------------------------------------------------- inventario
     controller.show_admin_view()
     root.update()
@@ -240,6 +259,16 @@ def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     admin.event_add_category()
     assert "Aseo" in db.categories
     assert admin.view.stat_cards["out"].value_label.cget("text") == "1"
+
+    # Clic en "Agotados" filtra la tabla; el segundo clic quita el filtro.
+    admin.view.search_entry.delete(0, "end")
+    admin.event_filter_changed()
+    admin.event_toggle_stock_filter("out")
+    assert [admin.view.tree.item(i, "values")[0] for i in admin.view.tree.get_children()] == ["B2"]
+    assert admin.view.filter_note.winfo_manager() == "pack"
+    admin.event_toggle_stock_filter("out")
+    assert len(admin.view.tree.get_children()) == 2
+    assert admin.view.filter_note.winfo_manager() == ""
 
     # ---------------------------------------------------------------- productos
     controller.show_product_management_view()
@@ -256,7 +285,7 @@ def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     view.entry_stock.delete(0, "end")
     view.entry_stock.insert(0, "4")
     products.event_add_stock()
-    assert db.products["A1"].stock == 6  # 5 iniciales - 2 - 1 vendidas + 4 agregadas
+    assert db.products["A1"].stock == 5  # 5 iniciales - 2 - 1 - 1 vendidas + 4 agregadas
     products.event_new()
     assert view.get_code() == ""
 
@@ -266,10 +295,28 @@ def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     report = controller.report_controller
     assert_visible(controller, report.view)
     report.event_quick_range("today")
-    assert len(report.rows) == 2
+    assert len(report.rows) == 3
     assert report.totals.cash == Decimal(6000)
-    assert report.totals.card == Decimal(3000)
-    assert report.totals.receipt_count == 2
+    assert report.totals.card == Decimal(6000)
+    assert report.totals.receipt_count == 3
+
+    # ---------------------------------------------------------------- dashboard
+    report.event_dashboard()
+    root.update()
+    dashboard = controller.dashboard_controller
+    assert_visible(controller, dashboard.view)
+    dashboard.event_period("today")
+    assert dashboard.view.kpi_cards["total"].value_label.cget("text") == "$12.000"
+    assert dashboard.view.kpi_cards["receipts"].value_label.cget("text") == "3"
+    assert dashboard.view.kpi_cards["profit"].value_label.cget("text") == "$4.000"
+    assert len(dashboard.view.top_tree.get_children()) == 1
+    assert dashboard.view._insight_labels, "debe haber hallazgos"
+    assert dashboard.view.restock_tree.get_children()
+    dashboard.event_open_inventory("out")
+    root.update()
+    assert_visible(controller, admin.view)
+    assert [admin.view.tree.item(i, "values")[0] for i in admin.view.tree.get_children()] == ["B2"]
+    admin.set_stock_filter(None)
 
     # ---------------------------------------------------------------- auditoría
     controller.show_auditlog_view()

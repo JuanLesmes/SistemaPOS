@@ -11,6 +11,7 @@ from tkinter import messagebox, simpledialog
 
 from controller.admin_view_controller import AdminViewController
 from controller.auditlog_view_controller import AuditLogViewController
+from controller.dashboard_view_controller import DashboardViewController
 from controller.menu_controller import MenuController
 from controller.product_management_view_controller import ProductManagementViewController
 from controller.sales_report_view_controller import SalesReportViewController
@@ -53,6 +54,9 @@ class MainController:
         self.frame_auditlog = tk.Frame(self.root)
         self.auditlog_controller = AuditLogViewController(self.frame_auditlog, self, self.db)
 
+        self.frame_dashboard = tk.Frame(self.root)
+        self.dashboard_controller = DashboardViewController(self.frame_dashboard, self, self.db)
+
         self._frames = (
             self.frame_menu,
             self.frame_admin,
@@ -60,6 +64,7 @@ class MainController:
             self.frame_sales,
             self.frame_report,
             self.frame_auditlog,
+            self.frame_dashboard,
         )
 
     # ------------------------------------------------------------------ ciclo de vida
@@ -72,9 +77,14 @@ class MainController:
     def show_menu(self) -> None:
         self._show(self.frame_menu)
 
-    def show_admin_view(self) -> None:
+    def show_admin_view(self, stock_filter: str | None = None) -> None:
         self.admin_controller.refresh()
+        self.admin_controller.set_stock_filter(stock_filter)
         self._show(self.frame_admin)
+
+    def show_dashboard_view(self) -> None:
+        self.dashboard_controller.refresh()
+        self._show(self.frame_dashboard)
 
     def show_product_management_view(self, product: Product | None = None) -> None:
         self.product_controller.refresh_categories()

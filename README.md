@@ -12,13 +12,20 @@ Es la base del producto POS de Inti Nova.
   de código de barras, carrito con cambio de cantidades, cobro en efectivo
   con botones de billetes, teclado numérico y cambio en vivo, tarjeta o
   transferencia, y ventana de resumen. El recibo se imprime solo si el cajero
-  activa "Imprimir recibo" antes de cobrar.
+  activa "Imprimir recibo" antes de cobrar. Cola de ventas para atender
+  varios clientes a la vez: cada venta abierta conserva sus productos y su
+  monto recibido hasta que se retoma.
 - Inventario: indicadores de valor y existencias, búsqueda y filtro por
   categoría, filas resaltadas con pocas existencias o agotadas.
 - Gestión de productos: buscar, crear, modificar, agregar existencias y dar de
   baja, con precio calculado desde costo y margen.
 - Reporte de ventas por rango de fechas con atajos (hoy, ayer, semana, mes),
   totales por método de pago y exportación a Excel.
+- Dashboard de ventas por período pensado para tomar decisiones: hallazgos
+  escritos en frases, comparación con el período anterior, horas pico, días
+  de la semana, evolución diaria, métodos de pago, productos más vendidos y
+  más rentables, ventas por categoría, reposición urgente con los días que
+  faltan para agotarse y mercancía sin movimiento con el costo inmovilizado.
 - Auditoría de cambios del catálogo con detalle antes y después.
 
 La paleta, las fuentes y los componentes compartidos viven en `view/theme.py`

@@ -54,6 +54,9 @@ class AdminView(ctk.CTkFrame):
             card = StatCard(stats, label, "0", accent=accent)
             card.grid(row=0, column=index, sticky="ew", padx=(0 if index == 0 else 10, 0))
             self.stat_cards[key] = card
+        self.stat_cards["low"].set_command(lambda: self.controller.event_toggle_stock_filter("low"))
+        self.stat_cards["out"].set_command(lambda: self.controller.event_toggle_stock_filter("out"))
+        self.stat_cards["count"].set_command(lambda: self.controller.set_stock_filter(None))
 
         toolbar = Card(self, padding=12)
         toolbar.grid(row=2, column=0, sticky="ew", padx=16, pady=12)
@@ -113,6 +116,9 @@ class AdminView(ctk.CTkFrame):
 
         table_card = Card(self, padding=10)
         table_card.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 16))
+        self.filter_note = ctk.CTkLabel(
+            table_card.body, text="", font=theme.font(12, bold=True), text_color=theme.WARNING, anchor="w"
+        )
         table_box = ctk.CTkFrame(table_card.body, fg_color="transparent")
         table_box.pack(fill="both", expand=True)
         self.tree = make_table(table_box, COLUMNS, "Inventory")
@@ -145,6 +151,18 @@ class AdminView(ctk.CTkFrame):
         self.stat_cards["low"].set_value(str(stats.low_stock_count))
         self.stat_cards["out"].set_value(str(stats.out_of_stock_count))
         self.header.set_subtitle(f"{stats.product_count} productos activos")
+
+    def set_stock_filter(self, key: str | None) -> None:
+        self.stat_cards["low"].set_active(key == "low")
+        self.stat_cards["out"].set_active(key == "out")
+
+    def set_filter_note(self, text: str) -> None:
+        """Aviso sobre la tabla cuando hay un filtro de existencias activo."""
+        if text:
+            self.filter_note.configure(text=f"{text}. Toque el indicador de nuevo para quitar el filtro.")
+            self.filter_note.pack(fill="x", padx=6, pady=(0, 6), before=self.tree.master)
+        else:
+            self.filter_note.pack_forget()
 
     def set_categories(self, categories: list[str]) -> None:
         values = [ALL_CATEGORIES] + [c for c in categories if c != ALL_CATEGORIES]

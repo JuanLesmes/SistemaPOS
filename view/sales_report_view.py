@@ -18,7 +18,7 @@ COLUMNS = (
     ("hora", "Hora", 70, "center", False),
     ("codigo", "Código", 130, "w", False),
     ("nombre", "Producto", 300, "w"),
-    ("cantidad", "Cantidad", 80, "center", False),
+    ("cantidad", "Cantidad", 96, "center", False),
     ("precio", "Precio", 100, "e", False),
     ("total", "Total", 110, "e", False),
     ("pago", "Pago", 120, "center", False),
@@ -40,7 +40,8 @@ class SalesReportView(ctk.CTkFrame):
 
         header = HeaderBar(self, "Reporte de ventas", "Ventas por rango de fechas y totales por método de pago")
         header.grid(row=0, column=0, sticky="ew")
-        header.add_action("Exportar a Excel", self.controller.event_export, kind="accent")
+        header.add_action("Ver dashboard", self.controller.event_dashboard, kind="accent")
+        header.add_action("Exportar a Excel", self.controller.event_export)
         header.add_action("Volver al menú", self.controller.event_back)
 
         filters = Card(self, padding=12)

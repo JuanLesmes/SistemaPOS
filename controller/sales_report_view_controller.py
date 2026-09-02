@@ -42,6 +42,9 @@ class SalesReportViewController:
     def event_back(self) -> None:
         self.main_controller.show_menu()
 
+    def event_dashboard(self) -> None:
+        self.main_controller.show_dashboard_view()
+
     @guarded
     def event_quick_range(self, key: str) -> None:
         today = dt.date.today()

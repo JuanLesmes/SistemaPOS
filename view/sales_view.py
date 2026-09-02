@@ -7,12 +7,13 @@ métodos de pago).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from decimal import Decimal
 
 import customtkinter as ctk
 
 from model.inventory import LOW_STOCK_THRESHOLD
+from model.pending_sale import PendingSale
 from model.product import Product
 from model.sold_product import SoldProduct
 from utils.formatters import format_price
@@ -52,16 +53,36 @@ class SalesView(ctk.CTkFrame):
 
     # ------------------------------------------------------------------ construcción
     def _build(self) -> None:
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
         header = HeaderBar(self, "Ventas", "Escanee, busque o toque un producto para agregarlo a la venta")
         header.grid(row=0, column=0, columnspan=3, sticky="ew")
         header.add_action("Volver al menú", self.controller.event_back)
 
-        self._build_categories().grid(row=1, column=0, sticky="ns", padx=(16, 0), pady=14)
-        self._build_catalog().grid(row=1, column=1, sticky="nsew", padx=12, pady=14)
-        self._build_cart().grid(row=1, column=2, sticky="ns", padx=(0, 16), pady=14)
+        self._build_queue().grid(row=1, column=0, columnspan=3, sticky="ew", padx=16, pady=(10, 0))
+        self._build_categories().grid(row=2, column=0, sticky="ns", padx=(16, 0), pady=10)
+        self._build_catalog().grid(row=2, column=1, sticky="nsew", padx=12, pady=10)
+        self._build_cart().grid(row=2, column=2, sticky="ns", padx=(0, 16), pady=10)
+
+    def _build_queue(self) -> Card:
+        """Franja con las ventas abiertas: un toque cambia de cliente, las demás esperan."""
+        card = Card(self, padding=8)
+        ctk.CTkLabel(card.body, text="Ventas en curso", font=theme.font(12, bold=True), text_color=theme.MUTED).pack(
+            side="left", padx=(6, 10)
+        )
+        self.queue_chips = ctk.CTkFrame(card.body, fg_color="transparent")
+        self.queue_chips.pack(side="left", fill="x", expand=True)
+        button(
+            card.body, "+ Nueva venta", self.controller.event_new_sale, kind="primary", size="sm", height=36, width=130
+        ).pack(side="right")
+        ctk.CTkLabel(
+            card.body,
+            text="Toque una venta para retomarla; las demás quedan en espera.",
+            font=theme.font(11),
+            text_color=theme.MUTED,
+        ).pack(side="right", padx=(0, 12))
+        return card
 
     def _build_categories(self) -> ctk.CTkFrame:
         self.category_panel = ctk.CTkScrollableFrame(
@@ -106,8 +127,9 @@ class SalesView(ctk.CTkFrame):
         panel.grid_rowconfigure(0, weight=1)
         panel.grid_columnconfigure(0, weight=1)
 
-        cart = Card(panel, "Venta actual", padding=12)
+        cart = Card(panel, "Venta 1", padding=12)
         cart.grid(row=0, column=0, sticky="nsew")
+        self.cart_title = cart.title_label
         self.count_label = ctk.CTkLabel(cart.title_row, text="0 productos", font=theme.font(12), text_color=theme.MUTED)
         self.count_label.pack(side="right")
 
@@ -127,9 +149,9 @@ class SalesView(ctk.CTkFrame):
         button(line_actions, "Quitar", self.controller.event_remove_line, kind="secondary", size="sm", width=90).pack(
             side="left", padx=(6, 0)
         )
-        button(line_actions, "Vaciar", self.controller.event_clear_sale, kind="ghost", size="sm", width=80).pack(
-            side="right"
-        )
+        button(
+            line_actions, "Cancelar venta", self.controller.event_cancel_sale, kind="ghost", size="sm", width=120
+        ).pack(side="right")
 
         total_row = ctk.CTkFrame(cart.body, fg_color="transparent")
         total_row.pack(fill="x", pady=(10, 0))
@@ -311,6 +333,23 @@ class SalesView(ctk.CTkFrame):
             index = selected if selected is not None and selected < len(children) else len(children) - 1
             self.tree.selection_set(children[index])
         self.count_label.configure(text=f"{sum(sp.quantity for sp in lines)} productos")
+
+    def show_queue(self, sales: Sequence[PendingSale], active_number: int) -> None:
+        for chip in self.queue_chips.winfo_children():
+            chip.destroy()
+        for sale in sales:
+            active = sale.number == active_number
+            text = f"Venta {sale.number}  ·  {sale.item_count} art.  ·  ${format_price(sale.total)}"
+            button(
+                self.queue_chips,
+                text,
+                lambda n=sale.number: self.controller.event_switch_sale(n),
+                kind="primary" if active else "secondary",
+                size="sm",
+                height=36,
+                font=theme.font(12, bold=True),
+            ).pack(side="left", padx=(0, 6))
+        self.cart_title.configure(text=f"Venta {active_number}")
 
     def selected_index(self) -> int | None:
         selection = self.tree.selection()
