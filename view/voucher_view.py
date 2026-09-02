@@ -40,8 +40,8 @@ class VoucherView(ctk.CTkToplevel):
         self.can_print = can_print
 
         self.title("Recibo de venta")
-        self.geometry("720x620+120+90")
-        self.minsize(640, 540)
+        self.geometry("720x660+120+40")
+        self.minsize(640, 600)
         self.configure(fg_color=theme.BACKGROUND)
         self.transient(parent)
         self.protocol("WM_DELETE_WINDOW", self.controller.event_close)
@@ -92,7 +92,7 @@ class VoucherView(ctk.CTkToplevel):
         table_card.pack(fill="both", expand=True, padx=24, pady=6)
         table_box = ctk.CTkFrame(table_card, fg_color="transparent")
         table_box.pack(fill="both", expand=True, padx=10, pady=10)
-        tree = make_table(table_box, COLUMNS, "Voucher", height=8)
+        tree = make_table(table_box, COLUMNS, "Voucher", height=6)
         fill_table(
             tree,
             (

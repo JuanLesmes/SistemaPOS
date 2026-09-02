@@ -128,12 +128,20 @@ class ProductManagementView(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=(8, 0))
 
         self.entry_stock = field("Stock inicial", 1, 3, columnspan=1)
+        stock_actions = ctk.CTkFrame(body, fg_color="transparent")
+        stock_actions.grid(row=3, column=4, columnspan=2, sticky="ew", padx=(0, 12))
+        stock_actions.grid_columnconfigure(0, weight=1)
         button(
-            body, "Ajustar existencias", self.controller.event_adjust_stock, kind="success", size="sm", height=40
-        ).grid(row=3, column=4, sticky="ew", padx=(0, 6))
-        button(body, "Kárdex", self.controller.event_kardex, kind="secondary", size="sm", height=40).grid(
-            row=3, column=5, sticky="ew", padx=(0, 12)
-        )
+            stock_actions,
+            "Ajustar existencias",
+            self.controller.event_adjust_stock,
+            kind="success",
+            size="sm",
+            height=40,
+        ).grid(row=0, column=0, sticky="ew")
+        button(
+            stock_actions, "Kárdex", self.controller.event_kardex, kind="secondary", size="sm", height=40, width=84
+        ).grid(row=0, column=1, padx=(6, 0))
 
         self.entry_cost = field("Costo", 2, 0)
         self.entry_cost.bind("<FocusOut>", lambda _event: self._recalculate_price())

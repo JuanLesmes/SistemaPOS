@@ -24,7 +24,7 @@ COLUMNS = (
     ("pago", "Pago", 120, "center", False),
 )
 
-QUICK_RANGES = (("Hoy", "today"), ("Ayer", "yesterday"), ("Esta semana", "week"), ("Este mes", "month"))
+QUICK_RANGES = (("Hoy", "today"), ("Ayer", "yesterday"), ("Semana", "week"), ("Mes", "month"))
 
 
 class SalesReportView(ctk.CTkFrame):
@@ -53,8 +53,8 @@ class SalesReportView(ctk.CTkFrame):
         section_label(body, "Hasta").grid(row=0, column=2, sticky="w", padx=(16, 8))
         self.end_date = _date_entry(body)
         self.end_date.grid(row=0, column=3, sticky="w")
-        button(body, "Consultar", self.controller.event_search, kind="primary", size="sm", height=40, width=130).grid(
-            row=0, column=4, padx=(16, 0)
+        button(body, "Consultar", self.controller.event_search, kind="primary", size="sm", height=40, width=110).grid(
+            row=0, column=4, padx=(12, 0)
         )
         actions = ctk.CTkFrame(body, fg_color="transparent")
         actions.grid(row=0, column=6, sticky="e", padx=(16, 0))
@@ -69,7 +69,13 @@ class SalesReportView(ctk.CTkFrame):
         body.grid_columnconfigure(5, weight=1)
         for label, key in QUICK_RANGES:
             button(
-                quick, label, lambda k=key: self.controller.event_quick_range(k), kind="ghost", size="sm", height=40
+                quick,
+                label,
+                lambda k=key: self.controller.event_quick_range(k),
+                kind="ghost",
+                size="sm",
+                height=40,
+                width=84,
             ).pack(side="left", padx=(6, 0))
 
         stats = ctk.CTkFrame(self, fg_color="transparent")
