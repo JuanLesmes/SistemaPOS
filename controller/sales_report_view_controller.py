@@ -1,135 +1,112 @@
-import tkinter as tk 
-from tkinter import messagebox, filedialog
-import datetime
-from model.sold_product import SoldProduct
+"""Reporte de ventas por rango de fechas y exportación a Excel."""
+
+from __future__ import annotations
+
+import datetime as dt
+import logging
+import tkinter as tk
+from tkinter import filedialog, messagebox
+
 from openpyxl import Workbook
-import os
+from openpyxl.styles import Font
+
+from controller.common import guarded
+from model.db_connection import DBConnection
+from model.report import SalesReportRow, SalesTotals, rows_from_receipts, totals_from_receipts
+from view.sales_report_view import SalesReportView
+
+logger = logging.getLogger(__name__)
+
+EXPORT_HEADERS = (
+    "Recibo",
+    "Fecha",
+    "Hora",
+    "Método de pago",
+    "Código",
+    "Producto",
+    "Cantidad",
+    "Precio unitario",
+    "Subtotal",
+)
+
 
 class SalesReportViewController:
-    def __init__(self, parent, main_controller, db):
-        self.parent = parent
+    def __init__(self, parent: tk.Frame, main_controller, db: DBConnection) -> None:
         self.main_controller = main_controller
         self.db = db
-        from view.sales_report_view import SalesReportView
-        self.view = SalesReportView(self.parent, self)
-        self.initialize()
+        self.rows: list[SalesReportRow] = []
+        self.totals: SalesTotals | None = None
+        self.view = SalesReportView(parent, self)
+        self.view.load_table([])
 
-    def initialize(self):
-        # Inicia la vista con la tabla vacía y totales en 0
-        self.view.load_table([])  
-        self.view.set_totals(0.0, 0.0, 0.0, 0.0)
+    def event_back(self) -> None:
+        self.main_controller.show_menu()
 
-    def event_back(self):
-        self.main_controller.show_login_view()
+    @guarded
+    def event_search(self) -> None:
+        start = self.view.get_start_date()
+        end = self.view.get_end_date()
+        if start > end:
+            raise ValueError("La fecha de inicio no puede ser posterior a la fecha final.")
+        receipts = self.db.get_receipts_in_range(start, end)
+        self.rows = rows_from_receipts(receipts)
+        self.totals = totals_from_receipts(receipts)
+        self.view.load_table(self.rows)
+        self.view.set_totals(self.totals)
+        if not receipts:
+            messagebox.showinfo("Reporte", "No hay ventas en el rango seleccionado.")
 
-    def event_search(self):
-        # Recupera las fechas seleccionadas en la vista
-        start_date = self.view.get_start_date()
-        end_date = self.view.get_end_date()
-        if start_date is None or end_date is None:
-            messagebox.showerror("No Dates", "Please select start and end dates.")
+    @guarded
+    def event_export(self) -> None:
+        if not self.rows:
+            messagebox.showinfo("Exportar", "Primero consulte un rango de fechas con ventas.")
             return
-        
-        # Obtiene los recibos desde la base de datos en el rango indicado
-        receipts = self.db.get_receipts_in_range(start_date, end_date)
-        
-        # Agrupa los productos vendidos de los recibos
-        sold_products = self.aggregate_sold_products(receipts)
-        # Actualiza la tabla de la vista
-        self.view.load_table(sold_products)
-        
-        # Calcula los totales según el método de pago
-        rec_total, cash, card, transfer = self.calculate_totals(receipts)
-        # Actualiza los totales en la vista
-        self.view.set_totals(rec_total, cash, card, transfer)
-
-    def aggregate_sold_products(self, receipts):
-        aggregated = {}
-        for r in receipts:
-            # formatea la hora con minuto exacto
-            if hasattr(r, "time") and isinstance(r.time, datetime.time):
-                minute_str = r.time.strftime("%H:%M")
-            else:
-                minute_str = "00:00"
-            for sp in r.sold_products:
-                key = (sp.get_code(), minute_str, r.payment_method)
-                if key in aggregated:
-                    agg_sp = aggregated[key]
-                    agg_sp.quantity += sp.quantity
-                    agg_sp.calculate_total_partial()
-                else:
-                    new_sp = SoldProduct(0, sp.product, sp.quantity)
-                    new_sp.date = r.date
-                    new_sp.time = r.time
-                    new_sp.time_str = minute_str
-                    new_sp.payment_method = r.payment_method
-                    aggregated[key] = new_sp
-        return list(aggregated.values())
-
-    
-    def get_receipts_by_date_range(self, start_date, end_date):
-        # Ejemplo de filtrado
-        all_receipts = self.model.get_all_receipts()
-        filtered = [r for r in all_receipts if start_date <= r.sale_date <= end_date]
-        return filtered
-
-    def calculate_totals(self, receipts):
-        total = 0.0
-        cash = 0.0
-        card = 0.0
-        transfer = 0.0
-
-        for r in receipts:
-            total += r.total
-            # Usar las mismas cadenas que al generar el recibo
-            if r.payment_method == "Efectivo":  # <--- Antes era "Cash"
-                cash += r.total
-            elif r.payment_method == "Tarjeta":  # <--- Antes era "Card"
-                card += r.total
-            elif r.payment_method == "Transferencia":  # <--- Antes era "Transfer"
-                transfer += r.total
-
-        return total, cash, card, transfer
-    
-    def generate_report(self):
-        sold_products = self.view.get_displayed_products()
-        if not sold_products:
-            messagebox.showinfo("Sin datos", "No hay productos vendidos para exportar.")
-            return
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Reporte de Ventas"
-
-        # Encabezados
-        headers = ["Fecha", "Hora", "Nombre", "Cantidad", "Precio unitario", "Subtotal"]
-        ws.append(headers)
-
-        # Datos: cada sp es una venta individual
-        for sp in sold_products:
-            fecha = sp.date.strftime("%Y-%m-%d") if hasattr(sp.date, "strftime") else str(sp.date)
-            hora  = getattr(sp, "time_str", "")   # ahora minuto exacto
-            ws.append([
-                fecha,
-                hora,
-                sp.product.name,
-                sp.quantity,
-                sp.product.price,
-                sp.get_total_partial()
-            ])
-
-        # 5) Pregunta dónde guardar
         filename = filedialog.asksaveasfilename(
+            title="Guardar reporte",
             defaultextension=".xlsx",
             filetypes=[("Excel", "*.xlsx")],
-            initialfile=f"reporte_ventas_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            initialfile=f"reporte_ventas_{dt.datetime.now():%Y%m%d_%H%M%S}.xlsx",
         )
         if not filename:
             return
+        workbook = _build_workbook(self.rows, self.totals)
+        workbook.save(filename)
+        logger.info("Reporte exportado a %s (%s filas)", filename, len(self.rows))
+        messagebox.showinfo("Reporte guardado", f"El archivo quedó en:\n{filename}")
 
-        # 6) Guarda y avisa
-        try:
-            wb.save(filename)
-            messagebox.showinfo("Éxito", f"Reporte guardado en:\n{filename}")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar:\n{e}")
+
+def _build_workbook(rows: list[SalesReportRow], totals: SalesTotals | None) -> Workbook:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Ventas"
+    sheet.append(list(EXPORT_HEADERS))
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for row in rows:
+        sheet.append(
+            [
+                row.receipt_id,
+                row.date,
+                row.time.strftime("%H:%M"),
+                row.payment_method,
+                row.code,
+                row.name,
+                row.quantity,
+                row.unit_price,
+                row.total,
+            ]
+        )
+    if totals is not None:
+        sheet.append([])
+        sheet.append(["Total recaudado", "", "", "", "", "", "", "", totals.total])
+        sheet.append(["Efectivo", "", "", "", "", "", "", "", totals.cash])
+        sheet.append(["Tarjeta", "", "", "", "", "", "", "", totals.card])
+        sheet.append(["Transferencia", "", "", "", "", "", "", "", totals.transfer])
+        for row_cells in sheet.iter_rows(min_row=sheet.max_row - 3, max_row=sheet.max_row):
+            row_cells[0].font = Font(bold=True)
+    for column in ("B", "F"):
+        sheet.column_dimensions[column].width = 14 if column == "B" else 36
+    for column in ("H", "I"):
+        for cell in sheet[column][1:]:
+            cell.number_format = "#,##0"
+    return workbook

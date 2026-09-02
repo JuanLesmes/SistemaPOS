@@ -1,169 +1,143 @@
-# view/auditlog_view.py
-import json
+"""Registro de auditoría: lista de eventos del día y detalle antes/después."""
+
+from __future__ import annotations
+
+import datetime as dt
 import tkinter as tk
 from tkinter import ttk
+
 import customtkinter as ctk
 from tkcalendar import DateEntry
-from datetime import date
+
+from model.audit_log import AuditEntry
+from view import theme
+
+SUMMARY_COLUMNS = (
+    ("timestamp", "Fecha y hora", 150),
+    ("action", "Acción", 150),
+    ("code", "Código", 120),
+)
+
 
 class AuditLogView(tk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent)
+    def __init__(self, parent, controller) -> None:
+        super().__init__(parent, bg=theme.BACKGROUND)
         self.controller = controller
+        self._entries: list[AuditEntry] = []
+        self._create_widgets()
 
-        # Configuración de grid para panel fijo sin sash
+    def _create_widgets(self) -> None:
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=500)
+        self.grid_columnconfigure(1, weight=2)
 
-        # ————— Filtro de fecha —————
-        filtro = ctk.CTkFrame(self, fg_color="#ececec")
-        filtro.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10,0))
-        filtro.grid_columnconfigure(1, weight=1)
-
+        filters = ctk.CTkFrame(self, fg_color=theme.HEADER, corner_radius=0)
+        filters.grid(row=0, column=0, columnspan=2, sticky="ew")
+        filters.grid_columnconfigure(2, weight=1)
+        ctk.CTkLabel(filters, text="Auditoría", text_color=theme.BLACK, font=theme.font(20, bold=True)).grid(
+            row=0, column=0, padx=20, pady=12
+        )
         self.date_picker = DateEntry(
-            filtro, date_pattern="yyyy-MM-dd",
-            background="white", foreground="black", borderwidth=1
+            filters, date_pattern="yyyy-mm-dd", background="white", foreground="black", borderwidth=1, locale="es_CO"
         )
-        self.date_picker.grid(row=0, column=0, padx=(0,5), pady=5)
-
+        self.date_picker.grid(row=0, column=1, padx=(0, 8), pady=12)
         ctk.CTkButton(
-            filtro, text="Cargar Logs", width=120,
-            command=self._on_click_load
-        ).grid(row=0, column=1, sticky="w", pady=5)
-
+            filters,
+            text="Cargar",
+            width=110,
+            fg_color=theme.PRIMARY,
+            hover_color=theme.PRIMARY_HOVER,
+            text_color=theme.WHITE,
+            font=theme.font(13, bold=True),
+            corner_radius=8,
+            command=self._on_load_click,
+        ).grid(row=0, column=2, sticky="w", pady=12)
         ctk.CTkButton(
-            filtro,
-            text="Volver al Menú",
-            fg_color="#f7b267",         
-            hover_color="#c7853a",      
-            text_color="black",          
+            filters,
+            text="Volver al menú",
+            fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER,
+            text_color=theme.BLACK,
+            font=theme.font(13, bold=True),
+            corner_radius=8,
             command=self.controller.event_back,
-            font=("Segoe UI", 12),      
-            corner_radius=8             
-        ).grid(row=0, column=2, sticky="e", padx=(10, 5), pady=5)
+        ).grid(row=0, column=3, sticky="e", padx=20, pady=12)
 
-
-        # ----- Panel izquierdo: resumen -----
-        frame_left = ttk.Frame(self)
-        frame_left.grid(row=1, column=0, sticky="nsew", padx=(10,5), pady=10)
-
-        cols = ("timestamp","action","code")
+        left = ctk.CTkFrame(self, fg_color=theme.WHITE, corner_radius=8)
+        left.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        left.grid_rowconfigure(0, weight=1)
+        left.grid_columnconfigure(0, weight=1)
         self.tree = ttk.Treeview(
-            frame_left, columns=cols, show="headings", selectmode="browse", height=20
+            left,
+            columns=[c[0] for c in SUMMARY_COLUMNS],
+            show="headings",
+            selectmode="browse",
+            style=theme.table_style("Audit", row_height=24),
         )
-        for c in cols:
-            self.tree.heading(c, text=c.capitalize())
-            self.tree.column(c, width=120, stretch=False)
-
-        vsb = ttk.Scrollbar(frame_left, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=vsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        frame_left.grid_rowconfigure(0, weight=1)
-        frame_left.grid_columnconfigure(0, weight=1)
-
+        for key, title, width in SUMMARY_COLUMNS:
+            self.tree.heading(key, text=title)
+            self.tree.column(key, width=width, stretch=True)
+        summary_scroll = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=summary_scroll.set)
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=6)
+        summary_scroll.grid(row=0, column=1, sticky="ns", pady=6)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
-        # ----- Panel derecho: detalles antes/después -----
-        frame_right = ttk.Frame(self)
-        frame_right.grid(row=1, column=1, sticky="nsew", padx=(5,10), pady=10)
-        frame_right.grid_rowconfigure(1, weight=1)
-        frame_right.grid_columnconfigure(0, weight=1)
-
-        lbl = ctk.CTkLabel(
-            frame_right,
-            text="Modificaciones (Antes → Después):",
-            font=("Segoe UI", 12, "bold")
+        right = ctk.CTkFrame(self, fg_color=theme.WHITE, corner_radius=8)
+        right.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        right.grid_rowconfigure(1, weight=1)
+        right.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            right, text="Cambios (antes y después)", font=theme.font(13, bold=True), text_color=theme.BLACK
+        ).grid(row=0, column=0, sticky="w", padx=8, pady=(8, 4))
+        self.details = ttk.Treeview(
+            right,
+            columns=("field", "before", "after"),
+            show="headings",
+            style=theme.table_style("AuditDetail", row_height=24),
         )
-        lbl.grid(row=0, column=0, sticky="w", padx=5, pady=(0,5))
+        self.details.heading("field", text="Campo")
+        self.details.heading("before", text="Antes")
+        self.details.heading("after", text="Después")
+        self.details.column("field", width=120, stretch=False)
+        self.details.column("before", width=220, stretch=True)
+        self.details.column("after", width=220, stretch=True)
+        detail_scroll = ttk.Scrollbar(right, orient="vertical", command=self.details.yview)
+        self.details.configure(yscrollcommand=detail_scroll.set)
+        self.details.grid(row=1, column=0, sticky="nsew", padx=(6, 0), pady=(0, 6))
+        detail_scroll.grid(row=1, column=1, sticky="ns", pady=(0, 6))
 
-        # Definimos la tabla de detalles
-        detail_cols = ("field", "before", "after")
-        self.details_table = ttk.Treeview(
-            frame_right, columns=detail_cols, show="headings", height=20
-        )
-        self.details_table.heading("field", text="Campo")
-        self.details_table.heading("before", text="Antes")
-        self.details_table.heading("after", text="Después")
-        self.details_table.column("field",  width=100, stretch=False)
-        self.details_table.column("before", width=200, stretch=True)
-        self.details_table.column("after",  width=200, stretch=True)
+    # ------------------------------------------------------------------ API para el controlador
+    def set_date(self, day: dt.date) -> None:
+        self.date_picker.set_date(day)
 
-        vsb2 = ttk.Scrollbar(
-            frame_right, orient="vertical", command=self.details_table.yview
-        )
-        hsb2 = ttk.Scrollbar(
-            frame_right, orient="horizontal", command=self.details_table.xview
-        )
-        self.details_table.configure(
-            yscrollcommand=vsb2.set,
-            xscrollcommand=hsb2.set
-        )
-
-        self.details_table.grid(row=1, column=0, sticky="nsew", padx=5, pady=(0,5))
-        vsb2.grid(row=1, column=1, sticky="ns")
-        hsb2.grid(row=2, column=0, sticky="ew")
-
-        # Carga inicial
-        today = date.today().strftime("%Y-%m-%d")
-        self.date_picker.set_date(today)
-        self._load_logs_for_date(today)
-
-    def _on_click_load(self):
-        date_str = self.date_picker.get_date().strftime("%Y-%m-%d")
-        self._load_logs_for_date(date_str)
-
-    def _load_logs_for_date(self, date_str):
-        logs = self.controller.db.get_logs_by_date(date_str)
-        # Guarda sólo detalles en lista paralela
-        self._logs = []
-        # Limpia resumen y detalles
-        for iid in self.tree.get_children():
-            self.tree.delete(iid)
-        for iid in self.details_table.get_children():
-            self.details_table.delete(iid)
-
-        # Llena resumen
-        for idx, row in enumerate(logs):
-            if isinstance(row, dict):
-                ts      = row.get("timestamp")
-                action  = row.get("action")
-                code    = row.get("code")
-                details = row.get("details")
-            else:
-                ts, action, code, details, *_ = row
-            self.tree.insert("", "end", iid=str(idx), values=(ts, action, code))
-            self._logs.append(details or "")
-
-        # Auto‑selecciona y muestra la primera fila
+    def show_logs(self, entries: list[AuditEntry]) -> None:
+        self._entries = list(entries)
+        theme.clear_table(self.tree)
+        theme.clear_table(self.details)
+        for index, entry in enumerate(self._entries):
+            self.tree.insert(
+                "",
+                "end",
+                iid=str(index),
+                values=(entry.timestamp.strftime("%Y-%m-%d %H:%M:%S"), entry.action, entry.code or ""),
+            )
         children = self.tree.get_children()
         if children:
-            first = children[0]
-            self.tree.selection_set(first)
-            self._on_select(None)
+            self.tree.selection_set(children[0])
+            self._show_details(0)
 
-    def _on_select(self, event):
-        sel = self.tree.selection()
-        if not sel:
-            return
-        idx = int(sel[0])
-        raw = self._logs[idx]
-        try:
-            data = json.loads(raw)
-        except Exception:
-            data = {"raw": raw}
-        before = data.get("before", {})
-        after  = data.get("after", {})
-        # Limpia tabla de detalles
-        for iid in self.details_table.get_children():
-            self.details_table.delete(iid)
-        # Inserta cada campo
-        keys = sorted(set(before) | set(after))
-        for key in keys:
-            val_before = before.get(key, "")
-            val_after  = after.get(key, "")
-            self.details_table.insert(
-                "", "end",
-                values=(key, str(val_before), str(val_after))
-            )
+    # ------------------------------------------------------------------ interno
+    def _on_load_click(self) -> None:
+        self.controller.event_load_logs(self.date_picker.get_date())
+
+    def _on_select(self, _event) -> None:
+        selection = self.tree.selection()
+        if selection:
+            self._show_details(int(selection[0]))
+
+    def _show_details(self, index: int) -> None:
+        theme.clear_table(self.details)
+        before, after = self._entries[index].changes()
+        for key in sorted(set(before) | set(after)):
+            self.details.insert("", "end", values=(key, str(before.get(key, "")), str(after.get(key, ""))))

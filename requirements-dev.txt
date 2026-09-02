@@ -1,0 +1,5 @@
+# Herramientas de desarrollo y empaquetado. Instalar con: pip install -r requirements-dev.txt
+-r requirements.txt
+pyinstaller==6.22.2
+pytest==9.1.1
+ruff==0.16.5

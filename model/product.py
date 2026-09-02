@@ -1,12 +1,21 @@
-class Product:
-    def __init__(self, code, name, cost, price, stock, category, description):
-        self.code = code
-        self.name = name
-        self.cost = cost
-        self.price = price
-        self.stock = stock
-        self.category = category
-        self.description = description
+from __future__ import annotations
 
-    def __str__(self):
+from dataclasses import dataclass
+from decimal import Decimal
+
+
+@dataclass
+class Product:
+    """Producto del catálogo. Los precios son Decimal para no perder centavos."""
+
+    code: str
+    name: str
+    cost: Decimal
+    price: Decimal
+    stock: int
+    category: str
+    description: str = ""
+    active: bool = True
+
+    def __str__(self) -> str:
         return f"{self.code} | {self.name} | {self.category} | Stock: {self.stock} | Precio: ${self.price}"

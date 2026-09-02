@@ -1,344 +1,259 @@
-import tkinter as tk
-from tkinter import ttk
-import customtkinter as ctk
-from utils.formatters import format_price  # Si se usa para formatear precios en otros lugares
+"""Formulario de gestión de productos."""
 
-ctk.set_appearance_mode("light")   # light / dark
-ctk.set_default_color_theme("blue")  # blue / dark-blue / green
+from __future__ import annotations
+
+import tkinter as tk
+from collections.abc import Callable
+from decimal import Decimal
+from tkinter import ttk
+
+import customtkinter as ctk
+
+from model.product import Product
+from utils.formatters import format_price, parse_money
+from view import theme
+
+# La primera opción (vacía) significa "precio manual": no se recalcula solo.
+GAIN_OPTIONS = ("", "10", "20", "30", "40", "50", "100", "200")
+
 
 class ProductManagementView(tk.Frame):
-    """
-    Vista de Gestión de Productos, usando 'place' con coordenadas relativas
-    para reproducir el diseño horizontal de la imagen,
-    pero ocupando toda la pantalla de manera escalada.
-    """
-    def __init__(self, parent, controller):
-        super().__init__(parent)
+    """Usa 'place' con coordenadas relativas para conservar el diseño original."""
+
+    def __init__(self, parent, controller) -> None:
+        super().__init__(parent, bg=theme.BACKGROUND)
         self.controller = controller
-        fondo = "#9db7b1"          # Fondo general
-        self.config(bg=fondo)
         self.pack(fill="both", expand=True)
+        self._result_labels: list[ctk.CTkLabel] = []
+        self._create_widgets()
 
-        self.create_widgets()
+    def _create_widgets(self) -> None:
+        font_label = theme.font(15, bold=True)
+        font_entry = theme.font(15)
+        font_button = theme.font(15, bold=True)
 
-    def create_widgets(self):
-        # Paleta de colores actualizada
-        header_color = "#10a2a7"    # Color de la cabecera
-        boton_principal = "#b57426"  # Botón "Volver a gestión de Inventario"
-        
-        # Fuentes
-        font_header = ("Segoe UI", 20, "bold")
-        font_label  = ("Segoe UI", 15, "bold")
-        font_entry  = ("Segoe UI", 15)
-        font_button = ("Segoe UI", 15, "bold")
+        header = ctk.CTkFrame(self, fg_color=theme.HEADER, corner_radius=0)
+        header.place(relx=0, rely=0, relwidth=1, relheight=0.10)
+        ctk.CTkLabel(header, text="Gestión de productos", text_color=theme.BLACK, font=theme.font(20, bold=True)).place(
+            relx=0.5, rely=0.5, anchor="center"
+        )
 
-        # Zona principal
-        body_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
-        body_frame.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
-
-        # Usamos grid en body_frame
-        # Configuramos columnas para que las etiquetas estén alineadas y las entradas también
-        for col in range(4):
-            body_frame.grid_columnconfigure(col, weight=1, uniform="col")
-
-       # Cabecera
-        header_frame = ctk.CTkFrame(self, fg_color=header_color, corner_radius=0)
-        header_frame.place(relx=0, rely=0, relwidth=1, relheight=0.10)
-        ctk.CTkLabel(
-            header_frame,
-            text="Gestión de Productos",
-            fg_color=header_color,
-            text_color="black",
-            font=font_header
-        ).place(relx=0.5, rely=0.5, anchor="center")
-
-        # Zona principal
-        body_frame = ctk.CTkFrame(self, fg_color="#9db7b1", corner_radius=0)
-        body_frame.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
+        body = ctk.CTkFrame(self, fg_color=theme.BACKGROUND, corner_radius=0)
+        body.place(relx=0, rely=0.15, relwidth=1, relheight=0.7)
 
         row_gap = 0.18
-        offset_label = 0.05
-        offset_entry = 0.10
+        label_offset = 0.05
+        entry_offset = 0.10
 
-        # Fila 0 - Código y Nombre
-        row = 0
-        ctk.CTkLabel(body_frame, text="Código", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
-        self.entry_code = ctk.CTkEntry(body_frame, width=200, height=30, corner_radius=15, font=font_entry)
-        self.entry_code.place(relx=0.02, rely=row * row_gap + offset_entry)
+        def label(text: str, relx: float, row: int) -> None:
+            ctk.CTkLabel(body, text=text, text_color=theme.BLACK, font=font_label).place(
+                relx=relx, rely=row * row_gap + label_offset
+            )
 
-        ctk.CTkLabel(body_frame, text="Nombre", text_color="black", font=font_label).place(relx=0.17, rely=row * row_gap + offset_label)
-        self.entry_name = ctk.CTkEntry(body_frame, width=250, height=30, corner_radius=15, font=font_entry)
-        self.entry_name.place(relx=0.17, rely=row * row_gap + offset_entry)
+        def entry(width: int, relx: float, row: int, **kwargs) -> ctk.CTkEntry:
+            widget = ctk.CTkEntry(body, width=width, height=30, corner_radius=15, font=font_entry, **kwargs)
+            widget.place(relx=relx, rely=row * row_gap + entry_offset)
+            return widget
 
-        # Fila 1 - Descripción
-        row = 1
-        ctk.CTkLabel(body_frame, text="Descripción", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
-        self.entry_description = ctk.CTkTextbox(body_frame, width=500, height=50, corner_radius=15, font=font_entry)
-        self.entry_description.place(relx=0.02, rely=row * row_gap + offset_entry)
+        label("Código", 0.02, 0)
+        self.entry_code = entry(200, 0.02, 0)
+        label("Nombre", 0.17, 0)
+        self.entry_name = entry(250, 0.17, 0)
 
-        # Fila 2 - Categoría y Stock
-        row = 2
-        ctk.CTkLabel(body_frame, text="Categoría", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
-        self.cmb_category = ttk.Combobox(body_frame, values=[], state="readonly", width=20)
-        self.cmb_category.place(relx=0.02, rely=row * row_gap + offset_entry)
+        label("Descripción", 0.02, 1)
+        self.entry_description = ctk.CTkTextbox(body, width=500, height=50, corner_radius=15, font=font_entry)
+        self.entry_description.place(relx=0.02, rely=1 * row_gap + entry_offset)
 
-        # Botón justo debajo del combobox (agregamos +0.07 de separación vertical)
+        label("Categoría", 0.02, 2)
+        self.cmb_category = ttk.Combobox(body, values=[], state="readonly", width=20)
+        self.cmb_category.place(relx=0.02, rely=2 * row_gap + entry_offset)
         ctk.CTkButton(
-            body_frame, text="Eliminar Categoría", corner_radius=15,
-            fg_color="#FF0000", font=font_button,
-            command=self.controller.event_delete_category
-        ).place(relx=0.02, rely=row * row_gap + offset_entry + 0.07)
+            body,
+            text="Eliminar categoría",
+            corner_radius=15,
+            fg_color=theme.DANGER,
+            hover_color=theme.DANGER_HOVER,
+            font=font_button,
+            command=self.controller.event_delete_category,
+        ).place(relx=0.02, rely=2 * row_gap + entry_offset + 0.07)
 
-        ctk.CTkLabel(body_frame, text="Stock", text_color="black", font=font_label).place(relx=0.22, rely=row * row_gap + offset_label)
-        self.entry_stock = ctk.CTkEntry(body_frame, width=150, height=30, corner_radius=15, font=font_entry)
-        self.entry_stock.place(relx=0.22, rely=row * row_gap + offset_entry)
+        label("Stock", 0.22, 2)
+        self.entry_stock = entry(150, 0.22, 2)
+        ctk.CTkButton(
+            body,
+            text="Agregar existencias",
+            corner_radius=15,
+            fg_color=theme.SUCCESS,
+            hover_color=theme.SUCCESS_HOVER,
+            font=font_button,
+            command=self.controller.event_add_stock,
+        ).place(relx=0.22, rely=2 * row_gap + entry_offset + 0.07)
 
-        # Fila 3 - Costo, Ganancia %, Precio
-        row = 3
-        ctk.CTkLabel(body_frame, text="Costo", text_color="black", font=font_label).place(relx=0.02, rely=row * row_gap + offset_label)
-        self.entry_cost = ctk.CTkEntry(body_frame, width=150, height=30, corner_radius=15, font=font_entry)
-        self.entry_cost.place(relx=0.02, rely=row * row_gap + offset_entry)
-        self.entry_cost.bind("<FocusOut>", lambda e: self._on_gain_selected())
+        label("Costo", 0.02, 3)
+        self.entry_cost = entry(150, 0.02, 3)
+        self.entry_cost.bind("<FocusOut>", lambda _event: self._recalculate_price())
 
-        ctk.CTkLabel(body_frame, text="Ganancia %", text_color="black", font=font_label).place(relx=0.14, rely=row * row_gap + offset_label)
-        self.cmb_gain = ttk.Combobox(body_frame, values=["10", "20", "30", "40", "50", "100", "200"], state="readonly", width=10)
+        label("Ganancia %", 0.14, 3)
+        self.cmb_gain = ttk.Combobox(body, values=GAIN_OPTIONS, state="readonly", width=10)
         self.cmb_gain.current(0)
-        self.cmb_gain.place(relx=0.14, rely=row * row_gap + offset_entry)
-        self.cmb_gain.bind("<<ComboboxSelected>>", lambda e: self._on_gain_selected())
+        self.cmb_gain.place(relx=0.14, rely=3 * row_gap + entry_offset)
+        self.cmb_gain.bind("<<ComboboxSelected>>", lambda _event: self._recalculate_price())
 
-        ctk.CTkLabel(body_frame, text="Precio", text_color="black", font=font_label).place(relx=0.22, rely=row * row_gap + offset_label)
-        self.entry_price = ctk.CTkEntry(body_frame, width=150, height=30, corner_radius=15, font=font_entry, state="readonly")
-        self.entry_price.place(relx=0.22, rely=row * row_gap + offset_entry)
+        label("Precio", 0.22, 3)
+        self.entry_price = entry(150, 0.22, 3)
 
-
-
-        # Botones y búsqueda
-        btn_frame = ctk.CTkFrame(body_frame, fg_color="#9db7b1", corner_radius=0)
-        btn_frame.place(relx=0.5, rely=0.05, relwidth=0.25, relheight=0.9, anchor="n")
-
-        ctk.CTkLabel(
-            btn_frame, text="Ingrese Nombre o código del producto:",
-            font=font_label, text_color="black"
-        ).pack(pady=(10,5))
-
-        self.entry_search = ctk.CTkEntry(
-            btn_frame, width=200, height=30,
-            corner_radius=15, font=font_entry
+        buttons = ctk.CTkFrame(body, fg_color=theme.BACKGROUND, corner_radius=0)
+        buttons.place(relx=0.5, rely=0.05, relwidth=0.25, relheight=0.9, anchor="n")
+        ctk.CTkLabel(buttons, text="Nombre o código del producto:", font=font_label, text_color=theme.BLACK).pack(
+            pady=(10, 5)
         )
-        self.entry_search.pack(pady=(10,5))
-        ctk.CTkButton(
-            btn_frame, text="Buscar", text_color="black", corner_radius=15,
-            fg_color="#0000FF", font=font_button,
-            command=self.controller.event_search_scan,
-            height=40
-        ).pack(fill="x", pady=5)
-        ctk.CTkButton(
-            btn_frame, text="Agregar Producto", text_color="black", corner_radius=15,
-            fg_color="#28A745", font=font_button,
-            command=self.controller.event_add_product,
-            height=40
-        ).pack(fill="x", pady=5)
-        ctk.CTkButton(
-            btn_frame, text="Modificar Producto", text_color="black", corner_radius=15,
-            fg_color="#FFD700", font=font_button,
-            command=self.controller.event_modify_product,
-            height=40
-        ).pack(fill="x", pady=5)
-        ctk.CTkButton(
-            btn_frame, text="Eliminar Producto", text_color="black", corner_radius=15,
-            fg_color="#FF0000", font=font_button,
-            command=self.controller.event_delete_product,
-            height=40
-        ).pack(fill="x", pady=5)
+        self.entry_search = ctk.CTkEntry(buttons, width=200, height=30, corner_radius=15, font=font_entry)
+        self.entry_search.pack(pady=(10, 5))
+        self.entry_search.bind("<Return>", lambda _event: self.controller.event_search())
+        for text, color, hover, command in (
+            ("Buscar", theme.PRIMARY, theme.PRIMARY_HOVER, self.controller.event_search),
+            ("Agregar producto", theme.SUCCESS, theme.SUCCESS_HOVER, self.controller.event_add_product),
+            ("Modificar producto", theme.WARNING, theme.WARNING_HOVER, self.controller.event_modify_product),
+            ("Eliminar producto", theme.DANGER, theme.DANGER_HOVER, self.controller.event_delete_product),
+        ):
+            ctk.CTkButton(
+                buttons,
+                text=text,
+                text_color=theme.BLACK,
+                corner_radius=15,
+                fg_color=color,
+                hover_color=hover,
+                font=font_button,
+                command=command,
+                height=40,
+            ).pack(fill="x", pady=5)
 
-        # ————————————
-        # Panel derecho existente: results_frame
-        # ————————————
-        self.results_frame = ctk.CTkFrame(
-            body_frame,
-            fg_color="#ffffff",
-            corner_radius=10,
-            border_width=2,
-            border_color="#cccccc"
-        )
-        self.results_frame.place(relx=0.65, rely=0.05, relwidth=0.33, relheight=0.9)
-
-        self.results_title = ctk.CTkLabel(
-            self.results_frame,
-            text="Resultados de Búsqueda",
-            font=font_label,
-            text_color="black"
-        )
-        self.results_title.pack(pady=(10, 5))
-
-        # Contenedor interno para los resultados
-        self.results_container = ctk.CTkFrame(
-            self.results_frame,
-            fg_color="#ffffff",
-            corner_radius=0
-        )
+        results = ctk.CTkFrame(body, fg_color=theme.WHITE, corner_radius=10, border_width=2, border_color=theme.BORDER)
+        results.place(relx=0.65, rely=0.05, relwidth=0.33, relheight=0.9)
+        ctk.CTkLabel(results, text="Resultados de búsqueda", font=font_label, text_color=theme.BLACK).pack(pady=(10, 5))
+        self.results_container = ctk.CTkScrollableFrame(results, fg_color=theme.WHITE, corner_radius=0)
         self.results_container.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Lista para poder limpiar resultados más tarde
-        self._result_labels = []
-
-
-
-        # Botón volver
         ctk.CTkButton(
-            self, text="Volver a gestión de Inventario", text_color="black", corner_radius=15,
-            fg_color=boton_principal, font=font_button,
-            command=self.controller.event_go_back_to_inventory
-        ).place(relx=0.35, rely=0.85, relwidth=0.3, relheight=0.1)
+            self,
+            text="Volver al inventario",
+            text_color=theme.BLACK,
+            corner_radius=15,
+            fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER,
+            font=font_button,
+            command=self.controller.event_go_back,
+        ).place(relx=0.35, rely=0.87, relwidth=0.3, relheight=0.08)
 
-        # Cálculo inicial
-        self._on_gain_selected()
-
-    # ------------------------------------------------------
-    # Métodos getters/setters
-    # ------------------------------------------------------
-    def get_code(self):
+    # ------------------------------------------------------------------ lectura del formulario
+    def get_code(self) -> str:
         return self.entry_code.get().strip()
 
-    def set_code(self, value):
-        self.entry_code.delete(0, "end")
-        self.entry_code.insert(0, value)
-
-    def get_name(self):
+    def get_name(self) -> str:
         return self.entry_name.get().strip()
 
-    def set_name(self, value):
-        self.entry_name.delete(0, "end")
-        self.entry_name.insert(0, value)
-
-    def get_stock(self):
+    def get_stock(self) -> str:
         return self.entry_stock.get().strip()
 
-    def set_stock(self, value):
-        self.entry_stock.delete(0, "end")
-        self.entry_stock.insert(0, value)
+    def get_cost(self) -> str:
+        return self.entry_cost.get().strip()
 
-    def get_cost(self):
-        cost_str = self.entry_cost.get().strip()
-        cost_str = cost_str.replace(".", "").replace(",", ".")
-        return cost_str
+    def get_price(self) -> str:
+        return self.entry_price.get().strip()
 
-    def set_cost(self, value):
-        formatted_cost = format_price(value, decimals=2)
-        self.entry_cost.delete(0, "end")
-        self.entry_cost.insert(0, formatted_cost)
-
-    def get_price(self):
-        price_str = self.entry_price.get().strip()
-        price_str = price_str.replace(".", "").replace(",", ".")
-        return price_str
-
-    def set_price(self, value):
-        formatted_price = format_price(value, decimals=2)
-        self.entry_price.configure(state="normal")
-        self.entry_price.delete(0, "end")
-        self.entry_price.insert(0, formatted_price)
-        self.entry_price.configure(state="readonly")
-
-    def get_category(self):
+    def get_category(self) -> str:
         return self.cmb_category.get().strip()
 
-    def set_categories(self, categories):
-        """
-        Actualiza la lista de categorías en el combobox.
-        """
-        sorted_categories = sorted(categories, key=lambda x: x.lower())
-        self.cmb_category.config(values=sorted_categories)
-        if sorted_categories:
-            self.cmb_category.current(0)
-
-    def get_description(self):
+    def get_description(self) -> str:
         return self.entry_description.get("1.0", "end").strip()
 
-    def set_description(self, value):
-        self.entry_description.delete("1.0", "end")
-        self.entry_description.insert("1.0", value)
+    def get_search_term(self) -> str:
+        return self.entry_search.get().strip()
 
-    def clear_fields(self):
-        self.set_code("")
-        self.set_name("")
-        self.set_stock("")
-        self.set_cost("")
-        self.set_price("")
-        self.set_description("")
+    # ------------------------------------------------------------------ escritura del formulario
+    def set_form(self, product: Product) -> None:
+        _set_entry(self.entry_code, product.code)
+        _set_entry(self.entry_name, product.name)
+        _set_entry(self.entry_stock, str(product.stock))
+        _set_entry(self.entry_cost, _money_text(product.cost))
+        self.cmb_gain.current(0)  # precio manual: no se recalcula al cargar
+        _set_entry(self.entry_price, _money_text(product.price))
+        self.entry_description.delete("1.0", "end")
+        self.entry_description.insert("1.0", product.description)
+        categories = list(self.cmb_category.cget("values"))
+        if product.category in categories:
+            self.cmb_category.current(categories.index(product.category))
+
+    def clear_fields(self) -> None:
+        for widget in (self.entry_code, self.entry_name, self.entry_stock, self.entry_cost, self.entry_price):
+            _set_entry(widget, "")
+        self.entry_description.delete("1.0", "end")
+        self.cmb_gain.current(0)
         self.clear_search()
+        self.show_search_results([], lambda _product: None)
         if self.cmb_category.cget("values"):
             self.cmb_category.current(0)
 
-    def get_search_term(self):
-        return self.entry_search.get().strip()
-
-    def clear_search(self):
+    def clear_search(self) -> None:
         self.entry_search.delete(0, "end")
 
-    # Métodos para manejar la categoría en el combobox
-    def get_selected_category(self):
-        return self.cmb_category.get().strip()
+    def set_categories(self, categories: list[str]) -> None:
+        current = self.cmb_category.get()
+        self.cmb_category.configure(values=list(categories))
+        if current in categories:
+            self.cmb_category.current(categories.index(current))
+        elif categories:
+            self.cmb_category.current(0)
+        else:
+            self.cmb_category.set("")
 
-    def clear_new_category(self):
-        self.new_category_entry.delete(0, "end")
-
-    def get_new_category(self):
-        return self.new_category_entry.get().strip()
-
-    def _on_gain_selected(self):
-        # Leer costo actual
-        cost_str = self.entry_cost.get().strip().replace(".", "").replace(",", ".")
-        try:
-            cost = float(cost_str) if cost_str else 0.0
-        except ValueError:
-            return
-
-        # Leer % de ganancia
-        gain_pct = float(self.cmb_gain.get())
-
-        # Precio = costo * (1 + ganancia/100)
-        price = cost * (1 + gain_pct / 100)
-
-        # Mostrarlo con formato
-        self.set_price(price)
-
-    def show_search_results(self, products, on_select_callback):
-        # Limpiar anteriores
-        for lbl in self._result_labels:
-            lbl.destroy()
+    def show_search_results(self, products: list[Product], on_select: Callable[[Product], None]) -> None:
+        for label in self._result_labels:
+            label.destroy()
         self._result_labels.clear()
-
         if not products:
-            none_lbl = ctk.CTkLabel(
-                self.results_container,
-                text="No se encontraron resultados.",
-                font=("Segoe UI", 12),
-                text_color="gray"
-            )
-            none_lbl.pack(fill="x", pady=5)
-            self._result_labels.append(none_lbl)
             return
-
-        for prod in products:
-            # Formato con todos los campos
-            line = (
-                f"{prod.name}    "
-                f"{prod.category}    "
-                f"Stock: {prod.stock}    "
-                f"Precio: {format_price(prod.price, 2)}"
+        for product in products:
+            text = (
+                f"{product.name}   |   {product.category}   |   "
+                f"Stock: {product.stock}   |   Precio: ${format_price(product.price)}"
             )
-            lbl = ctk.CTkLabel(
+            label = ctk.CTkLabel(
                 self.results_container,
-                text=line,
-                font=("Segoe UI", 12),
-                text_color="black",
+                text=text,
+                font=theme.font(12),
+                text_color=theme.BLACK,
                 anchor="w",
                 cursor="hand2",
-                wraplength=self.results_container.winfo_width() - 20
+                wraplength=380,
+                justify="left",
             )
-            lbl.pack(fill="x", pady=2)
-            lbl.bind("<Button-1>", lambda e, p=prod: on_select_callback(p))
-            self._result_labels.append(lbl)
-            
+            label.pack(fill="x", pady=2)
+            label.bind("<Button-1>", lambda _event, p=product: on_select(p))
+            self._result_labels.append(label)
 
+    # ------------------------------------------------------------------ interno
+    def _recalculate_price(self) -> None:
+        """Precio = costo x (1 + ganancia). Solo cuando hay un porcentaje elegido."""
+        gain_text = self.cmb_gain.get().strip()
+        cost_text = self.get_cost()
+        if not gain_text or not cost_text:
+            return
+        try:
+            cost = parse_money(cost_text)
+            gain = Decimal(gain_text)
+        except ValueError:
+            return
+        price = cost * (1 + gain / 100)
+        _set_entry(self.entry_price, _money_text(price))
+
+
+def _set_entry(widget: ctk.CTkEntry, value: str) -> None:
+    widget.delete(0, "end")
+    widget.insert(0, value)
+
+
+def _money_text(value: Decimal) -> str:
+    """Muestra centavos solo cuando existen."""
+    decimals = 0 if value == value.to_integral_value() else 2
+    return format_price(value, decimals)

@@ -1,94 +1,61 @@
-# controller/admin_view_controller.py
+"""Control de inventario: listado de productos, filtro por categoría y valorización."""
 
+from __future__ import annotations
+
+import tkinter as tk
+from decimal import Decimal
 from tkinter import messagebox
 
+from controller.common import guarded
+from model.db_connection import DBConnection
+from model.product import Product
+from view.admin_view import AdminView
+
+ALL_CATEGORIES = "Todas"
+
+
 class AdminViewController:
-    def __init__(self, parent, main_controller, db):
-        """
-        parent: un Frame o contenedor en main_controller
-        main_controller: para navegar a otras vistas
-        db: instancia de DBConnection para acceder a la BD
-        """
-        self.parent = parent
+    def __init__(self, parent: tk.Frame, main_controller, db: DBConnection) -> None:
         self.main_controller = main_controller
         self.db = db
+        self.view = AdminView(parent, self)
+        self.refresh()
 
-        from view.admin_view import AdminView
-        self.view = AdminView(self.parent, self)
+    @guarded
+    def refresh(self) -> None:
+        """Recarga categorías y productos; se llama cada vez que se muestra la pantalla."""
+        self.view.set_categories(self.db.get_categories())
+        self._load_products(None)
 
-        self.initialize()
+    def event_back(self) -> None:
+        self.main_controller.show_menu()
 
-    def initialize(self):
-        # Al iniciar, mostramos todos los productos
-        products = self.db.get_products()
-        # Cargamos en la tabla
-        self.view.load_table(products)
-        # Calculamos y mostramos la valorización
-        self.view.set_inventory_value(self.calculate_inventory_value(products))
-        # Cargamos las categorías en el combo
-        all_cats = self.db.get_categories() 
-        self.view.set_categories(all_cats)
-
-    def calculate_inventory_value(self, products):
-        """
-        Suma de (price * stock) de todos los productos.
-        """
-        total = 0.0
-        for p in products:
-            total += p.price * p.stock
-        return total
-
-    # ------------------------
-    # EVENTOS DE LA VISTA
-    # ------------------------
-    def event_back(self):
-        """
-        Vuelve al menú principal (o login_view).
-        """
-        self.main_controller.show_login_view()
-
-    def event_filter(self):
-        """
-        Cuando se presiona "Filtrar por Categoría".
-        """
+    @guarded
+    def event_filter(self) -> None:
         category = self.view.get_selected_category()
-        if category == "Todas":
-            # Mostrar todos
-            products = self.db.get_products()
-        else:
-            # Filtrar
-            products = self.db.get_products_by_category(category)
-        self.view.load_table(products)
-        # Recalcular valorización
-        self.view.set_inventory_value(self.calculate_inventory_value(products))
+        self._load_products(None if category == ALL_CATEGORIES else category)
 
-    def event_add_category(self):
-        new_cat = self.view.get_new_category()
-        if not new_cat:
-            messagebox.showerror("Error", "Ingrese un nombre para la categoría.")
+    @guarded
+    def event_add_category(self) -> None:
+        name = self.view.get_new_category()
+        if not name:
+            raise ValueError("Escriba el nombre de la nueva categoría.")
+        if not self.db.add_category(name):
+            messagebox.showwarning("Categoría", f"La categoría '{name}' ya existe.")
             return
-
-        if new_cat in self.db.get_categories():
-            messagebox.showwarning("Error", f"La categoría '{new_cat}' ya existe.")
-            return
-
-        self.db.add_category(new_cat)
-        messagebox.showinfo("Éxito", f"Categoría '{new_cat}' agregada.")
         self.view.clear_new_category()
-        
         self.main_controller.refresh_all_categories()
+        messagebox.showinfo("Categoría agregada", f"'{name}' quedó registrada.")
 
-
-    def event_manage_products(self):
-        """
-        Botón "Gestionar Producto".
-        Navega a otra vista (aún por implementar) 
-        o a product_management_view.
-        """
+    def event_manage_products(self) -> None:
         self.main_controller.show_product_management_view()
 
+    def _load_products(self, category: str | None) -> None:
+        products = self.db.get_products(category)
+        self.view.load_table(products)
+        self.view.set_inventory_value(inventory_value(products))
 
-    def refresh_categories(self):
-        updated_cats = self.db.get_categories()
-        self.view.set_categories(["Todas"] + updated_cats)
-        self.view.set_selected_category("Todas")
+
+def inventory_value(products: list[Product]) -> Decimal:
+    """Valor del inventario a precio de venta."""
+    return sum((p.price * p.stock for p in products), Decimal(0))

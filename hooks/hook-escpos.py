@@ -1,4 +1,4 @@
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-hiddenimports = collect_submodules('escpos')
-datas = collect_data_files('escpos')
+hiddenimports = collect_submodules("escpos")
+datas = collect_data_files("escpos")

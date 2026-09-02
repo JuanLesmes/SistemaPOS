@@ -1,135 +1,122 @@
+"""Controlador principal: crea las pantallas una sola vez y decide cuál se muestra."""
+
+from __future__ import annotations
+
+import hmac
+import logging
 import tkinter as tk
-from controller.voucher_view_controller import VoucherViewController
+from decimal import Decimal
+from tkinter import messagebox, simpledialog
+
+from controller.admin_view_controller import AdminViewController
+from controller.auditlog_view_controller import AuditLogViewController
+from controller.menu_controller import MenuController
 from controller.product_management_view_controller import ProductManagementViewController
+from controller.sales_report_view_controller import SalesReportViewController
+from controller.sales_view_controller import SalesViewController
+from controller.voucher_view_controller import VoucherViewController
 from model.db_connection import DBConnection
-from controller.login_view_controller import LoginViewController
-import tkinter.messagebox as msgbox
-from tkinter import simpledialog
+from model.receipt import Receipt
+from utils.config import Settings
+
+logger = logging.getLogger(__name__)
+
 
 class MainController:
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk, settings: Settings, db: DBConnection) -> None:
         self.root = root
-        self.root.title("InventoryManagement")
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.settings = settings
+        self.db = db
+        root.title(f"{settings.business.name} · Punto de venta")
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self._build_screens()
+        self.show_menu()
 
-        # Configuración de la base de datos
-        try:
-            self.db = DBConnection(
-                db_name="inventario",
-                user="postgres",
-                password="x",
-                host="localhost",
-                port="5432"
-            )
-        except Exception as e:
-            tk.messagebox.showerror("Error de conexión", str(e))
-            self.root.destroy()
-            return
+    def _build_screens(self) -> None:
+        self.frame_menu = tk.Frame(self.root)
+        self.menu_controller = MenuController(self.frame_menu, self)
 
-        # Inicializar vistas y controladores UNA VEZ
-        self._initialize_controllers()
-        self.show_login_view()
-
-    def _initialize_controllers(self):
-        """Inicializa todos los controladores y frames al inicio."""
-        from controller.admin_view_controller import AdminViewController
-        from controller.product_management_view_controller import ProductManagementViewController
-        from controller.sales_view_controller import SalesViewController
-        from controller.sales_report_view_controller import SalesReportViewController
-        from view.login_view import LoginView
-        from controller.auditlog_view_controller import AuditLogViewController
-
-        # Frame de Login
-        self.frame_login = tk.Frame(self.root)
-        self.login_controller = LoginViewController(self.frame_login, self, self.db)
-        self.login_view = self.login_controller.view
-
-        # Frame de Administración
         self.frame_admin = tk.Frame(self.root)
         self.admin_controller = AdminViewController(self.frame_admin, self, self.db)
-        
-        # Frame de Productos
-        self.frame_product_mgmt = tk.Frame(self.root)
-        self.product_mgmt_controller = ProductManagementViewController(
-            self.frame_product_mgmt, 
-            self, 
-            self.db
-        )
 
-        # Frame de Ventas (reutilizado)
+        self.frame_products = tk.Frame(self.root)
+        self.product_controller = ProductManagementViewController(self.frame_products, self, self.db)
+
         self.frame_sales = tk.Frame(self.root)
         self.sales_controller = SalesViewController(self.frame_sales, self, self.db)
 
-        # Frame de Reportes
-        self.frame_sales_report = tk.Frame(self.root)
-        self.report_controller = SalesReportViewController(self.frame_sales_report, self, self.db)
+        self.frame_report = tk.Frame(self.root)
+        self.report_controller = SalesReportViewController(self.frame_report, self, self.db)
 
-        # Frame de AuditLog
         self.frame_auditlog = tk.Frame(self.root)
         self.auditlog_controller = AuditLogViewController(self.frame_auditlog, self, self.db)
 
-    def on_close(self):
-        """Cierra la aplicación correctamente."""
-        self.db.close_connection()
+        self._frames = (
+            self.frame_menu,
+            self.frame_admin,
+            self.frame_products,
+            self.frame_sales,
+            self.frame_report,
+            self.frame_auditlog,
+        )
+
+    # ------------------------------------------------------------------ ciclo de vida
+    def on_close(self) -> None:
+        logger.info("Cerrando aplicación")
+        self.db.close()
         self.root.destroy()
 
-    # --------------------------
-    # Métodos para mostrar vistas
-    # --------------------------
-    def show_login_view(self):
-        self._show_frame(self.frame_login)
+    # ------------------------------------------------------------------ navegación
+    def show_menu(self) -> None:
+        self._show(self.frame_menu)
 
-    def show_admin_view(self):
-        self._show_frame(self.frame_admin)
+    def show_admin_view(self) -> None:
+        self.admin_controller.refresh()
+        self._show(self.frame_admin)
 
-    def show_product_management_view(self):
-        self.hide_all_frames()
-        self.frame_product_mgmt.pack(fill="both", expand=True)
-        self.product_mgmt_controller.view.set_categories(self.db.get_categories())
+    def show_product_management_view(self) -> None:
+        self.product_controller.refresh_categories()
+        self._show(self.frame_products)
 
-    def show_sales_view(self):
-        self.hide_all_frames()
-        self.frame_sales.pack(fill="both", expand=True)
-        self.sales_controller.initialize()
-        self.sales_controller.activate_barcode_reader()
+    def show_sales_view(self) -> None:
+        self._show(self.frame_sales)
+        self.sales_controller.on_show()
 
-    def show_sales_report_view(self):
-        self._show_frame(self.frame_sales_report    )
+    def show_sales_report_view(self) -> None:
+        self._show(self.frame_report)
 
-    def show_voucher_view(self, receipt, change_due):
-        VoucherViewController(self.root, self, receipt, change_due)
+    def show_auditlog_view(self) -> None:
+        self.auditlog_controller.load_today()
+        self._show(self.frame_auditlog)
 
-    def _show_frame(self, frame):
-        """Muestra un frame y oculta los demás."""
-        self.hide_all_frames()
-        frame.pack(fill="both", expand=True)
+    def show_voucher_view(self, receipt: Receipt, received: Decimal | None, change: Decimal) -> None:
+        VoucherViewController(self.root, self.settings.business, receipt, received, change)
 
-    def hide_all_frames(self):
-        for widget in self.root.winfo_children():
-            if isinstance(widget, tk.Frame):
-                widget.pack_forget()
-        
-        self.sales_controller.deactivate_barcode_reader() 
-        
-    def get_current_voucher_controller(self):
-        return self.current_voucher_controller
-    
-    def refresh_all_categories(self):
-        updated_cats = self.db.get_categories()
-        self.admin_controller.view.set_categories(["Todas"] + updated_cats)  # <-- admin_controller
-        if hasattr(self, "product_mgmt_controller"):
-            self.product_mgmt_controller.view.set_categories(updated_cats)
-
-    def show_auditlog_view(self):
-        self._show_frame(self.frame_auditlog)
-
-    def event_verify_auditlog_password(self):
-        password = simpledialog.askstring("Autenticación", "Ingrese la contraseña para Admin:", show="*")
-        
-        if password is None:
+    def request_auditlog_access(self) -> None:
+        expected = self.settings.admin_password
+        if not expected:
+            messagebox.showerror(
+                "Acceso",
+                "Configure ADMIN_PASSWORD en el archivo .env para entrar a la auditoría.",
+            )
             return
-        
-        if password == "1000721154":
+        typed = simpledialog.askstring("Autenticación", "Contraseña de administrador:", show="*", parent=self.root)
+        if typed is None:
+            return
+        if hmac.compare_digest(typed.encode("utf-8"), expected.encode("utf-8")):
             self.show_auditlog_view()
         else:
-            msgbox.showerror("Acceso denegado", "Contraseña incorrecta")
+            messagebox.showerror("Acceso denegado", "Contraseña incorrecta.")
+
+    # ------------------------------------------------------------------ datos compartidos
+    def refresh_all_categories(self) -> None:
+        categories = self.db.get_categories()
+        self.admin_controller.view.set_categories(categories)
+        self.product_controller.view.set_categories(categories)
+
+    # ------------------------------------------------------------------ interno
+    def _show(self, frame: tk.Frame) -> None:
+        self.sales_controller.on_hide()
+        for other in self._frames:
+            other.pack_forget()
+        frame.pack(fill="both", expand=True)

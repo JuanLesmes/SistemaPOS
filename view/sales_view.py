@@ -1,231 +1,188 @@
-import customtkinter as ctk
+"""Pantalla de ventas."""
+
+from __future__ import annotations
+
+import tkinter as tk
+from decimal import Decimal
 from tkinter import ttk
+
+import customtkinter as ctk
+
+from model.sold_product import SoldProduct
 from utils.formatters import format_price
+from view import theme
+
+COLUMNS = (
+    ("codigo", "Código", 130, "w"),
+    ("nombre", "Nombre", 320, "w"),
+    ("precio", "Precio", 120, "e"),
+    ("cantidad", "Cantidad", 90, "center"),
+    ("subtotal", "Subtotal", 130, "e"),
+)
+
 
 class SalesView(ctk.CTkFrame):
-    def __init__(self, parent, controller):
-        super().__init__(parent, fg_color="#9db7b1")
+    def __init__(self, parent, controller) -> None:
+        super().__init__(parent, fg_color=theme.BACKGROUND)
         self.controller = controller
-
-        # Colores
-        self.fondo = "#9db7b1"
-        self.barra_arriba = "#10a2a7"
-        self.boton_volver = "#b57426"
-        self.blanco = "#FFFFFF"
-        self.negro = "#000000"
-        self.rojo = "#FF0000"
-        self.azul = "#0000FF"
-
-        # Configuración de estilo para botones y entradas
-        self.btn_cfg = {
-            "corner_radius": 12,
-            "height": 50,
-            "width": 200,
-            "font": ("Segoe UI", 16, "bold")
-        }
-
-        self.entry_cfg = {
-            "corner_radius": 10,
-            "height": 35,
-            "width": 150,
-            "font": ("Segoe UI", 14)
-        }
-
-        # Layout
         self.pack(fill="both", expand=True)
-        self._create_tree_style()
         self._create_widgets()
+        self.recibe_entry.bind("<Return>", lambda _event: self.controller.event_cash_payment())
 
-        # Eventos
-        self.tree.bind("<Button-1>", self._on_click)  
-        self.bind("<Button-1>", self._on_click)  
-        self.recibe_entry.bind("<Return>", lambda e: self._on_enter_recibe())
-        self.recibe_entry.bind("<FocusIn>", lambda e: controller._pause_barcode_reader())
-        self.recibe_entry.bind("<FocusOut>", lambda e: controller._resume_barcode_reader())
+    def _create_widgets(self) -> None:
+        button_style = {"corner_radius": 12, "height": 50, "width": 200, "font": theme.font(16, bold=True)}
 
-    
-    def _on_click(self, event):
-        """Restaura el foco al hacer clic en la vista"""
-        widget = self.winfo_containing(event.x_root, event.y_root)
-        if widget != self.recibe_entry:
-            self.controller.force_focus_restore()
-
-    def _on_enter_recibe(self):
-        self.controller.process_payment()
-        self.focus_set()
-
-    def _create_tree_style(self):
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Sales.Treeview.Heading",
-                        background=self.barra_arriba,
-                        foreground="white",
-                        font=("Segoe UI", 14, "bold"))
-        style.configure("Sales.Treeview",
-                        font=("Segoe UI", 12),
-                        rowheight=28,
-                        fieldbackground=self.blanco,
-                        background=self.blanco,
-                        foreground=self.negro,
-                        bordercolor="#CCCCCC",
-                        borderwidth=1)
-        style.map("Sales.Treeview",
-                  background=[("selected", "#A0E7E5")],
-                  foreground=[("selected", "black")])
-
-    def _create_widgets(self):
-        # 1) Cabecera
-        header = ctk.CTkFrame(self, fg_color=self.barra_arriba, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color=theme.HEADER, corner_radius=0)
         header.pack(side="top", fill="x", ipady=5)
-
-        # Título y botón en cabecera
-        ctk.CTkLabel(header,
-                    text="Venta de Productos",
-                    text_color=self.negro,
-                    font=("Segoe UI", 20, "bold")
-        ).pack(side="left", padx=20)
-
-        ctk.CTkButton(header,
-                    text="Volver al Menú",
-                    fg_color=self.boton_volver,
-                    hover_color="#c7853a",
-                    text_color=self.negro,
-                    command=self.controller.event_back,
-                    **self.btn_cfg
+        ctk.CTkLabel(header, text="Venta de productos", text_color=theme.BLACK, font=theme.font(20, bold=True)).pack(
+            side="left", padx=20
+        )
+        ctk.CTkButton(
+            header,
+            text="Volver al menú",
+            fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER,
+            text_color=theme.BLACK,
+            command=self.controller.event_back,
+            **button_style,
         ).pack(side="right", padx=20)
 
-        # 2) Contenedor principal (tabla + sidebar)
-        main_container = ctk.CTkFrame(self, fg_color=self.fondo)
-        main_container.pack(side="top", fill="both", expand=True, padx=20, pady=10)
+        main = ctk.CTkFrame(self, fg_color=theme.BACKGROUND)
+        main.pack(side="top", fill="both", expand=True, padx=20, pady=10)
 
-        # 3) Contenedor de tabla (expandible)
         table_frame = ctk.CTkFrame(
-            main_container,
-            fg_color=self.blanco,
-            corner_radius=8,
-            border_width=1,
-            border_color="#CCCCCC"
+            main, fg_color=theme.WHITE, corner_radius=8, border_width=1, border_color=theme.BORDER
         )
         table_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
 
-        # Configuración del Treeview
-        cols = ("codigo", "nombre", "valor", "cantidad")
         self.tree = ttk.Treeview(
             table_frame,
-            columns=cols,
+            columns=[c[0] for c in COLUMNS],
             show="headings",
-            style="Sales.Treeview",
-            selectmode="browse"
+            style=theme.table_style("Sales"),
+            selectmode="browse",
         )
-
-        # Scrollbar
-        scrollbar = ctk.CTkScrollbar(table_frame)
+        scrollbar = ctk.CTkScrollbar(table_frame, command=self.tree.yview)
         scrollbar.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.configure(command=self.tree.yview)
-
-        # Configurar columnas
-        for col, w, a, h in [
-            ("codigo", 120, "w", "Código"),
-            ("nombre", 250, "w", "Nombre"),
-            ("valor", 120, "e", "Valor"),
-            ("cantidad", 100, "center", "Cantidad"),
-        ]:
-            self.tree.heading(col, text=h)
-            self.tree.column(col, width=w, anchor=a)
-        
+        for key, title, width, anchor in COLUMNS:
+            self.tree.heading(key, text=title)
+            self.tree.column(key, width=width, anchor=anchor)
         self.tree.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # 4) Sidebar derecho
-        sidebar = ctk.CTkFrame(main_container, fg_color=self.fondo, width=280)
-        sidebar.pack(side="right", fill="y", expand=False)
+        sidebar = ctk.CTkFrame(main, fg_color=theme.BACKGROUND, width=280)
+        sidebar.pack(side="right", fill="y")
 
-        # Botón eliminar producto
-        ctk.CTkButton(sidebar,
-                    text="Eliminar Producto",
-                    fg_color=self.rojo,
-                    hover_color="#cc0000",
-                    text_color=self.blanco,
-                    command=self.controller.event_remove_product,
-                    **self.btn_cfg
+        ctk.CTkButton(
+            sidebar,
+            text="Quitar producto",
+            fg_color=theme.DANGER,
+            hover_color=theme.DANGER_HOVER,
+            text_color=theme.WHITE,
+            command=self.controller.event_remove_line,
+            **button_style,
         ).pack(fill="x", pady=5)
 
-        # Sección de pago
-        ctk.CTkLabel(sidebar,
-                    text="Recibe:",
-                    text_color=self.negro,
-                    font=("Segoe UI", 14)
-        ).pack(anchor="w", pady=(20,5))
-        
-        self.recibe_entry = ctk.CTkEntry(sidebar,
-                                        placeholder_text="0",
-                                        fg_color=self.blanco,
-                                        text_color=self.negro,
-                                        **self.entry_cfg)
+        ctk.CTkLabel(sidebar, text="Recibe:", text_color=theme.BLACK, font=theme.font(14)).pack(
+            anchor="w", pady=(20, 5)
+        )
+        self.recibe_entry = ctk.CTkEntry(
+            sidebar,
+            placeholder_text="0",
+            fg_color=theme.WHITE,
+            text_color=theme.BLACK,
+            corner_radius=10,
+            height=35,
+            font=theme.font(14),
+        )
         self.recibe_entry.pack(fill="x")
 
-        self.total_label = ctk.CTkLabel(sidebar,
-                                    text="Total Venta: $0",
-                                    text_color=self.negro,
-                                    font=("Segoe UI", 16, "bold"))
-        self.total_label.pack(anchor="w", pady=(20,0))
+        self.total_label = ctk.CTkLabel(
+            sidebar, text="Total: $0", text_color=theme.BLACK, font=theme.font(18, bold=True)
+        )
+        self.total_label.pack(anchor="w", pady=(20, 0))
 
-        # 5) Botones de pago (parte inferior)
-        pay_frame = ctk.CTkFrame(self, fg_color=self.fondo, height=80)
+        self._printer_available = True
+        self.print_var = tk.BooleanVar(value=False)
+        self.print_switch = ctk.CTkSwitch(
+            sidebar,
+            text="Imprimir recibo",
+            variable=self.print_var,
+            font=theme.font(14, bold=True),
+            text_color=theme.BLACK,
+            progress_color=theme.SUCCESS,
+        )
+        self.print_switch.pack(anchor="w", pady=(25, 4))
+        self.print_hint = ctk.CTkLabel(
+            sidebar,
+            text="Actívelo antes de cobrar si el cliente quiere el recibo en papel.",
+            text_color=theme.MUTED,
+            font=theme.font(11),
+            wraplength=260,
+            justify="left",
+        )
+        self.print_hint.pack(anchor="w")
+
+        pay_frame = ctk.CTkFrame(self, fg_color=theme.BACKGROUND, height=80)
         pay_frame.pack(side="bottom", fill="x", padx=20, pady=10)
-
-        btn_extra_cfg = {
-            "width": 300,   # Más ancho
-            "height": 40    # Un poco menos alto
-        }
-
-        # Botones de métodos de pago
-        metodos_pago = [
-            ("Pago con Efectivo", self.controller.event_cash_payment),
-            ("Pago con Tarjeta", self.controller.event_card_payment),
-            ("Transferencia", self.controller.event_transfer_payment)
-        ]
-        
-        for texto, comando in metodos_pago:
-            ctk.CTkButton(pay_frame,
-                        text=texto,
-                        fg_color=self.azul,
-                        hover_color="#3333CC",
-                        text_color=self.blanco,
-                        command=comando,
-                        **{**self.btn_cfg, **btn_extra_cfg}
+        pay_style = {**button_style, "width": 300, "height": 40}
+        for text, command in (
+            ("Pago en efectivo", self.controller.event_cash_payment),
+            ("Pago con tarjeta", self.controller.event_card_payment),
+            ("Transferencia", self.controller.event_transfer_payment),
+        ):
+            ctk.CTkButton(
+                pay_frame,
+                text=text,
+                fg_color=theme.PRIMARY,
+                hover_color=theme.PRIMARY_HOVER,
+                text_color=theme.WHITE,
+                command=command,
+                **pay_style,
             ).pack(side="left", padx=10, expand=True)
 
-    # --------------------------------------------------------------------------
-    # Métodos que el controller usa para actualizar la vista
-    # --------------------------------------------------------------------------
-    def load_table(self, sold_products):
-        # Limpia la tabla
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        # Inserta cada producto
-        for sp in sold_products:
+    # ------------------------------------------------------------------ API para el controlador
+    def load_table(self, lines: list[SoldProduct]) -> None:
+        theme.clear_table(self.tree)
+        for sp in lines:
             self.tree.insert(
-                "", "end",
+                "",
+                "end",
                 values=(
-                    sp.product.code,
+                    sp.code,
                     sp.product.name,
-                    format_price(sp.product.price, decimals=0),
-                    sp.quantity
-                )
+                    format_price(sp.unit_price),
+                    sp.quantity,
+                    format_price(sp.total),
+                ),
             )
 
-    def set_total(self, total):
-        # Formatea y muestra el total
-        try:
-            total_num = float(total)
-            txt = format_price(total_num, decimals=0)
-        except ValueError:
-            txt = "0"
-        self.total_label.configure(text=f"Total Venta: $ {txt}")
+    def selected_index(self) -> int | None:
+        selection = self.tree.selection()
+        return self.tree.index(selection[0]) if selection else None
 
-    def clear_received_amount(self):
+    def set_total(self, total: Decimal) -> None:
+        self.total_label.configure(text=f"Total: ${format_price(total)}")
+
+    def get_received_amount(self) -> str:
+        return self.recibe_entry.get().strip()
+
+    def clear_received_amount(self) -> None:
         self.recibe_entry.delete(0, "end")
 
-    def get_received_amount(self):
-        return self.recibe_entry.get().strip()
+    def wants_receipt(self) -> bool:
+        """True solo si el cajero activó "Imprimir recibo" para esta venta."""
+        return self._printer_available and bool(self.print_var.get())
+
+    def reset_print_option(self) -> None:
+        self.print_var.set(False)
+
+    def set_printer_available(self, available: bool) -> None:
+        self._printer_available = available
+        if available:
+            self.print_switch.configure(state="normal")
+            self.print_hint.configure(text="Actívelo antes de cobrar si el cliente quiere el recibo en papel.")
+        else:
+            self.print_var.set(False)
+            self.print_switch.configure(state="disabled")
+            self.print_hint.configure(text="Impresora desactivada en config.json.")

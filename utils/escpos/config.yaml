@@ -1,7 +1,0 @@
-printer:
-  type: Usb  
-  vendor_id: 0x0483   
-  product_id: 0x070b  
-  interface: 0         
-  in_ep: 0x81          
-  out_ep: 0x02         

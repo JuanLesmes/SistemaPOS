@@ -1,10 +1,25 @@
-# Ignorar entorno virtual
+# Entorno virtual
 venv/
+.venv/
 
-# Ignorar archivos compilados de Python
+# Credenciales y configuración local (usar .env.example y config.example.json)
+.env
+config.json
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
 
-# Ignorar archivos de sistema
+# Empaquetado
+build/
+dist/
+
+# Registros de la aplicación
+logs/
+
+# Sistema operativo
 .DS_Store
 Thumbs.db

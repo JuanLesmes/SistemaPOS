@@ -1,0 +1,21 @@
+[project]
+name = "sistema-pos"
+version = "0.2.0"
+description = "Punto de venta e inventario de escritorio para tiendas pequeñas"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["venv", "build", "dist", "*.spec"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "N"]
+
+[tool.ruff.lint.per-file-ignores]
+# Los scripts ajustan sys.path antes de importar el proyecto.
+"scripts/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

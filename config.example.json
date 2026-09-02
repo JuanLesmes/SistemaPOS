@@ -1,0 +1,18 @@
+{
+  "business": {
+    "name": "Mi Tienda",
+    "nit": "000000000-0",
+    "address": "Calle 1 # 2 - 3",
+    "phone": "300 000 0000",
+    "receipt_footer": "Gracias por su compra"
+  },
+  "printer": {
+    "enabled": true,
+    "vendor_id": "0x0483",
+    "product_id": "0x070b",
+    "in_ep": "0x81",
+    "out_ep": "0x02",
+    "timeout_ms": 10000,
+    "paper_width_chars": 32
+  }
+}

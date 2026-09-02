@@ -1,20 +1,36 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+
+from model.product import Product
+
+
+@dataclass
 class SoldProduct:
-    def __init__(self, receipt_id, product, quantity, payment_method=None):
-        self.receipt_id = receipt_id
-        self.product = product
-        self.quantity = quantity
-        self.payment_method = payment_method
-        self.total_partial = 0.0
-        self.calculate_total_partial()
+    """Una línea de venta.
 
-    def calculate_total_partial(self):
-        if self.product and self.product.price is not None:
-            self.total_partial = self.product.price * self.quantity
-        else:
-            self.total_partial = 0.0
+    Guarda el precio y el costo unitarios al momento de vender, de modo que los
+    reportes históricos no cambien cuando el producto cambie de precio.
+    """
 
-    def get_code(self):
+    product: Product
+    quantity: int
+    unit_price: Decimal | None = None
+    unit_cost: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        if self.quantity <= 0:
+            raise ValueError("La cantidad vendida debe ser mayor que cero.")
+        if self.unit_price is None:
+            self.unit_price = self.product.price
+        if self.unit_cost is None:
+            self.unit_cost = self.product.cost
+
+    @property
+    def code(self) -> str:
         return self.product.code
 
-    def get_total_partial(self):
-        return self.total_partial
+    @property
+    def total(self) -> Decimal:
+        return self.unit_price * self.quantity
