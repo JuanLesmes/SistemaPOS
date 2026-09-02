@@ -16,6 +16,7 @@ psycopg2 = pytest.importorskip("psycopg2")
 
 from model.db_connection import DBConnection  # noqa: E402
 from model.errors import CategoryInUseError, DuplicateProductError, InsufficientStockError  # noqa: E402
+from model.pending_sale import PendingSale  # noqa: E402
 from model.product import Product  # noqa: E402
 from model.receipt import PAYMENT_CASH, Receipt  # noqa: E402
 from model.sold_product import SoldProduct  # noqa: E402
@@ -160,6 +161,27 @@ def test_category_with_products_cannot_be_deleted(db):
     db.add_category("Libre")
     assert db.delete_category("Libre") is True
     assert db.delete_category("Libre") is False
+
+
+def test_pending_sales_survive_reload_and_drop_inactive_products(db):
+    db.add_product(make_product("A1", stock=5))
+    db.add_product(make_product("B2", stock=5))
+    sale = PendingSale(number=3, received_text="10.000", wants_receipt=True)
+    sale.lines.append(SoldProduct(db.get_product("A1"), 2))
+    sale.lines.append(SoldProduct(db.get_product("B2"), 1))
+    sale.db_id = db.save_pending_sale(sale)
+
+    sale.lines[0].quantity = 4
+    assert db.save_pending_sale(sale) == sale.db_id  # actualizar conserva el id
+
+    db.deactivate_product("B2")
+    loaded = db.load_pending_sales()
+    assert len(loaded) == 1
+    assert loaded[0].number == 3 and loaded[0].received_text == "10.000" and loaded[0].wants_receipt is True
+    assert [(sp.code, sp.quantity) for sp in loaded[0].lines] == [("A1", 4)]
+
+    db.delete_pending_sale(sale.db_id)
+    assert db.load_pending_sales() == []
 
 
 def test_legacy_database_is_migrated_in_place(temp_settings):

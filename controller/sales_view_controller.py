@@ -16,7 +16,7 @@ from tkinter import messagebox
 
 from controller.common import guarded
 from model.db_connection import DBConnection
-from model.errors import PrinterError
+from model.errors import AppError, PrinterError
 from model.pending_sale import PendingSale
 from model.product import Product
 from model.receipt import PAYMENT_CARD, PAYMENT_CASH, PAYMENT_TRANSFER, Receipt
@@ -41,9 +41,9 @@ class SalesViewController:
     def __init__(self, parent: tk.Frame, main_controller, db: DBConnection) -> None:
         self.main_controller = main_controller
         self.db = db
-        self.sales: list[PendingSale] = []
-        self._next_number = 1
-        self.active: PendingSale = self._create_sale()
+        self.sales: list[PendingSale] = self._load_pending_sales()
+        self._next_number = max((sale.number for sale in self.sales), default=0) + 1
+        self.active: PendingSale = self.sales[0] if self.sales else self._create_sale()
         self.view = SalesView(parent, self)
 
         settings = main_controller.settings
@@ -55,11 +55,21 @@ class SalesViewController:
         self._category = ALL_CATEGORIES
         self._search_job: str | None = None
         self.refresh_catalog()
-        self._refresh()
+        self._activate(self.active)
 
     @property
     def lines(self) -> list[SoldProduct]:
         return self.active.lines
+
+    def _load_pending_sales(self) -> list[PendingSale]:
+        try:
+            sales = self.db.load_pending_sales()
+        except AppError:
+            logger.exception("No se pudieron recuperar las ventas en espera")
+            return []
+        if sales:
+            logger.info("Ventas en espera recuperadas: %s", len(sales))
+        return sales
 
     # ------------------------------------------------------------------ ciclo de vida
     def on_show(self) -> None:
@@ -71,6 +81,8 @@ class SalesViewController:
 
     def on_hide(self) -> None:
         self.reader.disable()
+        self._store_active_inputs()
+        self._persist(self.active)
 
     @guarded
     def refresh_catalog(self) -> None:
@@ -95,9 +107,27 @@ class SalesViewController:
         self.active.received_text = self.view.get_received_amount()
         self.active.wants_receipt = bool(self.view.print_var.get())
 
+    def _persist(self, sale: PendingSale) -> None:
+        """Guarda la venta en la base para que sobreviva a un cierre; nunca bloquea la caja."""
+        try:
+            if sale.is_empty:
+                if sale.db_id is not None:
+                    self.db.delete_pending_sale(sale.db_id)
+                    sale.db_id = None
+            else:
+                sale.db_id = self.db.save_pending_sale(sale)
+        except AppError:
+            logger.exception("No se pudo guardar la venta en espera %s", sale.number)
+
     def _close_active(self) -> None:
         """Saca la venta activa de la cola y pasa a la más antigua en espera, o a una nueva."""
-        self.sales.remove(self.active)
+        closing = self.active
+        self.sales.remove(closing)
+        if closing.db_id is not None:
+            try:
+                self.db.delete_pending_sale(closing.db_id)
+            except AppError:
+                logger.exception("No se pudo borrar la venta en espera %s", closing.number)
         self._activate(self.sales[0] if self.sales else self._create_sale())
 
     @guarded
@@ -108,6 +138,7 @@ class SalesViewController:
             )
             return
         self._store_active_inputs()
+        self._persist(self.active)
         self._activate(self._create_sale())
         self.view.focus_set()
 
@@ -119,6 +150,7 @@ class SalesViewController:
         if target is None:
             return
         self._store_active_inputs()
+        self._persist(self.active)
         self._activate(target)
         self.view.focus_set()
 
@@ -372,6 +404,8 @@ class SalesViewController:
         self.view.set_total(self.total())
         self.view.show_queue(self.sales, self.active.number)
         self._update_change()
+        self._store_active_inputs()
+        self._persist(self.active)
 
     def _warn_empty_sale(self) -> None:
         messagebox.showwarning("Venta vacía", "Agregue productos antes de cobrar.")

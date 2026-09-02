@@ -18,6 +18,11 @@ class PendingSale:
     lines: list[SoldProduct] = field(default_factory=list)
     received_text: str = ""
     wants_receipt: bool = False
+    db_id: int | None = None  # id en la tabla pending_sales cuando ya está guardada
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.lines and not self.received_text and not self.wants_receipt
 
     @property
     def total(self) -> Decimal:

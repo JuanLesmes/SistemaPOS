@@ -29,6 +29,7 @@ from model.errors import (
     ProductNotFoundError,
 )
 from model.migrations import run_migrations
+from model.pending_sale import PendingSale
 from model.product import Product
 from model.receipt import Receipt
 from model.sold_product import SoldProduct
@@ -417,6 +418,73 @@ class DBConnection:
                 )
             )
         return list(receipts.values())
+
+    # ------------------------------------------------------------------ ventas en espera
+    def load_pending_sales(self) -> list[PendingSale]:
+        """Ventas abiertas guardadas. Las líneas de productos ya inactivos se descartan."""
+        with self._transaction() as cur:
+            cur.execute(
+                """
+                SELECT ps.id, ps.number, ps.received_text, ps.wants_receipt,
+                       i.quantity, i.codep,
+                       p.code, p.name, p.cost, p.price, p.stock, p.description, p.active,
+                       c.category_name AS category
+                  FROM pending_sales ps
+                  LEFT JOIN pending_sale_items i ON i.pending_sale_id = ps.id
+                  LEFT JOIN products p ON p.code = i.codep AND p.active
+                  LEFT JOIN categories c ON c.idcategory = p.category
+                 ORDER BY ps.number, i.position, i.id
+                """
+            )
+            rows = cur.fetchall()
+        sales: dict[int, PendingSale] = {}
+        for row in rows:
+            sale = sales.get(row["id"])
+            if sale is None:
+                sale = PendingSale(
+                    number=int(row["number"]),
+                    received_text=row["received_text"] or "",
+                    wants_receipt=bool(row["wants_receipt"]),
+                    db_id=int(row["id"]),
+                )
+                sales[sale.db_id] = sale
+            if row["quantity"] is None:
+                continue
+            if row["code"] is None:
+                logger.warning(
+                    "Venta en espera %s: el producto %s ya no está activo; se omite", sale.number, row["codep"]
+                )
+                continue
+            sale.lines.append(SoldProduct(product=_product_from(row), quantity=int(row["quantity"])))
+        return list(sales.values())
+
+    def save_pending_sale(self, sale: PendingSale) -> int:
+        """Crea o actualiza la venta en espera con sus líneas y devuelve su id."""
+        with self._transaction() as cur:
+            if sale.db_id is None:
+                cur.execute(
+                    "INSERT INTO pending_sales (number, received_text, wants_receipt) VALUES (%s, %s, %s) RETURNING id",
+                    (sale.number, sale.received_text, sale.wants_receipt),
+                )
+                sale_id = int(cur.fetchone()["id"])
+            else:
+                sale_id = sale.db_id
+                cur.execute(
+                    "UPDATE pending_sales SET received_text = %s, wants_receipt = %s, updated_at = now() WHERE id = %s",
+                    (sale.received_text, sale.wants_receipt, sale_id),
+                )
+                cur.execute("DELETE FROM pending_sale_items WHERE pending_sale_id = %s", (sale_id,))
+            for position, sp in enumerate(sale.lines):
+                cur.execute(
+                    "INSERT INTO pending_sale_items (pending_sale_id, codep, quantity, position)"
+                    " VALUES (%s, %s, %s, %s)",
+                    (sale_id, sp.code, sp.quantity, position),
+                )
+        return sale_id
+
+    def delete_pending_sale(self, sale_id: int) -> None:
+        with self._transaction() as cur:
+            cur.execute("DELETE FROM pending_sales WHERE id = %s", (sale_id,))
 
     # ------------------------------------------------------------------ auditoría
     def get_logs_by_date(self, day: date) -> list[AuditEntry]:

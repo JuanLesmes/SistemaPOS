@@ -18,6 +18,7 @@ import pytest
 
 from model.audit_log import AuditEntry
 from model.errors import DuplicateProductError, ProductNotFoundError
+from model.pending_sale import PendingSale
 from model.product import Product
 from model.receipt import Receipt
 from utils.config import BusinessSettings, DatabaseSettings, PrinterSettings, Settings
@@ -30,6 +31,7 @@ class FakeDB:
         self.products: dict[str, Product] = {}
         self.categories: list[str] = ["General", "Bebidas"]
         self.receipts: list[Receipt] = []
+        self.pending: dict[int, PendingSale] = {}
         self.closed = False
 
     def close(self) -> None:
@@ -103,6 +105,17 @@ class FakeDB:
 
     def get_receipts_in_range(self, start: dt.date, end: dt.date) -> list[Receipt]:
         return [r for r in self.receipts if start <= r.date <= end]
+
+    def load_pending_sales(self) -> list[PendingSale]:
+        return list(self.pending.values())
+
+    def save_pending_sale(self, sale: PendingSale) -> int:
+        sale_id = sale.db_id or (max(self.pending, default=0) + 1)
+        self.pending[sale_id] = sale
+        return sale_id
+
+    def delete_pending_sale(self, sale_id: int) -> None:
+        self.pending.pop(sale_id, None)
 
     def get_logs_by_date(self, day: dt.date) -> list[AuditEntry]:
         return [AuditEntry(dt.datetime.combine(day, dt.time(9)), "add_product", "A1", '{"after": {"name": "x"}}', None)]
@@ -238,6 +251,7 @@ def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     assert "otra venta" in dialogs[-1][1]
     sales.event_switch_sale(first)
     assert sales.active.number == first and [sp.quantity for sp in sales.lines] == [1]
+    assert len(db.pending) == 2, "las dos ventas abiertas deben estar guardadas en la base"
     sales.event_cancel_sale()  # askyesno devuelve True
     assert len(sales.sales) == 1 and sales.active.number != first
     assert sales_view.cart_title.cget("text") == f"Venta {sales.active.number}"
@@ -245,6 +259,7 @@ def test_full_sale_flow_through_every_screen(root, settings, dialogs):
     root.update()
     close_toplevels(root)
     assert len(db.receipts) == 3 and len(sales.sales) == 1 and sales.lines == []
+    assert db.pending == {}, "al cobrar o cancelar, la venta sale de la base"
 
     # ---------------------------------------------------------------- inventario
     controller.show_admin_view()

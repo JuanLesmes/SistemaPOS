@@ -14,7 +14,7 @@ Es la base del producto POS de Inti Nova.
   transferencia, y ventana de resumen. El recibo se imprime solo si el cajero
   activa "Imprimir recibo" antes de cobrar. Cola de ventas para atender
   varios clientes a la vez: cada venta abierta conserva sus productos y su
-  monto recibido hasta que se retoma.
+  monto recibido hasta que se retoma, y sobrevive a un cierre del programa.
 - Inventario: indicadores de valor y existencias, búsqueda y filtro por
   categoría, filas resaltadas con pocas existencias o agotadas.
 - Gestión de productos: buscar, crear, modificar, agregar existencias y dar de
