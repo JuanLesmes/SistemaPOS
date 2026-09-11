@@ -1,10 +1,24 @@
 # SistemaPOS
 
+[![CI](https://github.com/JuanLesmes/SistemaPOS/actions/workflows/ci.yml/badge.svg)](https://github.com/JuanLesmes/SistemaPOS/actions/workflows/ci.yml)
+
 Punto de venta e inventario de escritorio para tiendas pequeñas. Aplicación
 Windows en Python (CustomTkinter) con base de datos PostgreSQL local e
 impresión de recibos en impresora térmica ESC/POS por USB.
 
 Es la base del producto POS de Inti Nova.
+
+<!-- Descomentar cuando existan las imágenes en capturas/
+## Capturas
+
+| Caja | Cierre de caja |
+|---|---|
+| ![Caja](capturas/caja.png) | ![Cierre de caja](capturas/cierre.png) |
+
+| Dashboard | Inventario |
+|---|---|
+| ![Dashboard](capturas/dashboard.png) | ![Inventario](capturas/inventario.png) |
+-->
 
 ## Qué hace hoy
 
@@ -54,6 +68,32 @@ Es la base del producto POS de Inti Nova.
 
 La paleta, las fuentes y los componentes compartidos viven en `view/theme.py`
 y `view/widgets.py`; cualquier cambio visual global se hace ahí.
+
+## Decisiones de diseño
+
+- **Ventas atómicas.** El recibo, sus líneas, los pagos y el descuento de
+  existencias se guardan en una sola transacción; si algo falla, no queda nada
+  a medias.
+- **Dinero exacto.** `NUMERIC(14,2)` en PostgreSQL y `Decimal` en Python; nunca
+  números flotantes.
+- **Foto del precio en cada línea.** Cada línea de venta guarda el precio, el
+  costo y el IVA del momento, así que los reportes históricos no cambian cuando
+  cambia el catálogo.
+- **Esquema versionado.** Migraciones en SQL plano numeradas y tabla
+  `schema_migrations`; la aplicación actualiza la base sola al arrancar.
+- **Nada se borra de verdad.** Claves foráneas con `RESTRICT` y borrado lógico
+  (`active`): dar de baja un producto o una categoría nunca destruye ventas
+  históricas. `CHECK (stock >= 0)` en la base impide existencias negativas.
+- **Seguridad sin dependencias extra.** Contraseñas con scrypt de la librería
+  estándar y sal por usuario; matriz de permisos por rol en código, aplicada
+  en el menú y en la navegación.
+- **La impresora nunca frena la venta.** El recibo se guarda aunque la
+  impresora falle y se imprime en un hilo aparte.
+- **Configuración fuera del código.** Credenciales en `.env`, negocio e
+  impresora en `config.json`; el asistente de primer arranque los escribe.
+- **Pruebas de verdad.** Unitarias, prueba de humo de la interfaz y pruebas de
+  integración contra una base PostgreSQL temporal, incluida una copia y
+  restauración reales con pg_dump y pg_restore.
 
 ## Requisitos
 
@@ -124,6 +164,10 @@ Las pruebas de base de datos se saltan a menos que existan las variables
 se crea y elimina una base temporal en cada ejecución; una de ellas hace una
 copia con pg_dump y la restaura con pg_restore.
 
+En GitHub Actions (`.github/workflows/ci.yml`) corren ruff y toda la suite,
+incluidas las pruebas de base de datos, sobre un runner de Windows con
+PostgreSQL.
+
 ## Empaquetado e instalador
 
 ```bash
@@ -150,6 +194,7 @@ datos del cliente. La versión sale de `utils/version.py`.
 
 ```
 run.py                  punto de entrada (abre el asistente si falta configuración)
+.github/workflows/      integración continua (ruff + pytest)
 controller/             lógica de cada pantalla
 view/                   interfaz (CustomTkinter); view/theme.py centraliza colores y fuentes
 model/                  entidades, permisos, errores de negocio; model/db/ acceso a datos por módulo
@@ -159,3 +204,8 @@ scripts/                seed de demostración, diagnóstico de la impresora, bui
 installer/              guion de Inno Setup
 tests/                  pruebas con pytest
 ```
+
+## Licencia
+
+Código publicado con fines de evaluación y demostración. Todos los derechos
+reservados, Inti Nova. Ver [LICENSE](LICENSE).
