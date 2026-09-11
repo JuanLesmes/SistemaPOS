@@ -8,7 +8,6 @@ impresión de recibos en impresora térmica ESC/POS por USB.
 
 Es la base del producto POS de Inti Nova.
 
-<!-- Descomentar cuando existan las imágenes en capturas/
 ## Capturas
 
 | Caja | Cierre de caja |
@@ -18,7 +17,6 @@ Es la base del producto POS de Inti Nova.
 | Dashboard | Inventario |
 |---|---|
 | ![Dashboard](capturas/dashboard.png) | ![Inventario](capturas/inventario.png) |
--->
 
 ## Qué hace hoy
 
