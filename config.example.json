@@ -9,18 +9,28 @@
   },
   "printer": {
     "enabled": true,
+    "mode": "windows",
+    "name": "",
+    "host": "",
+    "port": 9100,
+    "paper_width_mm": 80,
+    "cut": true,
+    "open_drawer": false,
     "vendor_id": "0x0483",
     "product_id": "0x070b",
     "in_ep": "0x81",
     "out_ep": "0x02",
-    "timeout_ms": 10000,
-    "paper_width_chars": 32,
-    "open_drawer": false
+    "timeout_ms": 10000
   },
   "backup": {
     "enabled": true,
     "directory": "backups",
     "keep": 30,
     "pg_bin": ""
+  },
+  "window": {
+    "maximized": true,
+    "width": 1520,
+    "height": 750
   }
 }

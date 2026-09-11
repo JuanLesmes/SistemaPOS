@@ -19,7 +19,6 @@ from utils.paths import app_dir
 from utils.setup import needs_setup
 from view.setup_wizard import run_setup_wizard
 
-WINDOW_GEOMETRY = "1520x750"
 MIN_WINDOW_SIZE = (1100, 650)
 
 
@@ -58,8 +57,10 @@ def main() -> int:
         return 1
 
     root.deiconify()
-    root.geometry(WINDOW_GEOMETRY)
+    root.geometry(settings.window.geometry)
     root.minsize(*MIN_WINDOW_SIZE)
+    if settings.window.maximized:
+        root.state("zoomed")
     MainController(root, settings, db)
     logger.info("Aplicación iniciada")
     root.mainloop()

@@ -50,6 +50,14 @@ class BusinessSettings:
     logo: str = ""  # ruta a una imagen PNG o JPG; relativa a la carpeta del programa si no es absoluta
 
 
+MODE_WINDOWS = "windows"  # impresora instalada en Windows; se le envía ESC/POS por el spooler
+MODE_NETWORK = "network"  # impresora de red, puerto 9100
+MODE_USB = "usb"  # USB directo con libusb (requiere el controlador WinUSB y los IDs del dispositivo)
+PRINTER_MODES = (MODE_WINDOWS, MODE_NETWORK, MODE_USB)
+PAPER_COLUMNS = {80: 48, 58: 32}  # ancho del papel en mm -> columnas de texto con la fuente normal
+WINDOW_SIZES = ("1366x768", "1520x750", "1600x900", "1920x1080")
+
+
 @dataclass(frozen=True)
 class PrinterSettings:
     enabled: bool
@@ -60,6 +68,23 @@ class PrinterSettings:
     timeout_ms: int
     paper_width_chars: int
     open_drawer: bool = False  # abrir el cajón monedero (conectado a la impresora) al cobrar en efectivo
+    mode: str = MODE_WINDOWS
+    name: str = ""  # nombre de la impresora en Windows; vacío = la predeterminada
+    host: str = ""  # IP de la impresora de red
+    port: int = 9100
+    paper_width_mm: int = 80
+    cut: bool = True  # cortar el papel al final de cada tiquete
+
+
+@dataclass(frozen=True)
+class WindowSettings:
+    maximized: bool = True
+    width: int = 1520
+    height: int = 750
+
+    @property
+    def geometry(self) -> str:
+        return f"{self.width}x{self.height}"
 
 
 @dataclass(frozen=True)
@@ -77,6 +102,7 @@ class Settings:
     printer: PrinterSettings
     admin_password: str
     backup: BackupSettings = field(default_factory=BackupSettings)
+    window: WindowSettings = field(default_factory=WindowSettings)
 
 
 def load_settings(base_dir: Path | None = None) -> Settings:
@@ -113,7 +139,26 @@ def load_settings(base_dir: Path | None = None) -> Settings:
         printer=_printer_from(data.get("printer", {})),
         admin_password=os.getenv("ADMIN_PASSWORD", ""),
         backup=_backup_from(data.get("backup", {})),
+        window=_window_from(data.get("window", {})),
     )
+
+
+def save_window_state(base: Path, maximized: bool, width: int | None = None, height: int | None = None) -> None:
+    """Guarda en config.json cómo quedó la ventana al cerrar, para abrirla igual la próxima vez."""
+    path = base / CONFIG_FILE
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        return
+    window = data.get("window") if isinstance(data.get("window"), dict) else {}
+    window["maximized"] = bool(maximized)
+    if not maximized and width and height and width >= 800 and height >= 500:
+        window["width"], window["height"] = int(width), int(height)
+    data["window"] = window
+    try:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        logger.warning("No se pudo guardar el tamaño de la ventana en %s", path, exc_info=True)
 
 
 def _copy_templates(base: Path) -> None:
@@ -142,7 +187,15 @@ def _business_from(raw: dict) -> BusinessSettings:
 
 
 def _printer_from(raw: dict) -> PrinterSettings:
+    mode = str(raw.get("mode", MODE_WINDOWS) or MODE_WINDOWS).strip().lower()
+    if mode not in PRINTER_MODES:
+        raise ConfigError(f"printer.mode en {CONFIG_FILE} debe ser uno de {', '.join(PRINTER_MODES)}; llegó '{mode}'.")
     try:
+        paper_width_mm = _as_int(raw.get("paper_width_mm", 80))
+        if "paper_width_chars" in raw:
+            columns = _as_int(raw["paper_width_chars"])
+        else:
+            columns = PAPER_COLUMNS.get(paper_width_mm, 48 if paper_width_mm >= 70 else 32)
         return PrinterSettings(
             enabled=bool(raw.get("enabled", True)),
             vendor_id=_as_int(raw.get("vendor_id", "0x0483")),
@@ -150,11 +203,28 @@ def _printer_from(raw: dict) -> PrinterSettings:
             in_ep=_as_int(raw.get("in_ep", "0x81")),
             out_ep=_as_int(raw.get("out_ep", "0x02")),
             timeout_ms=_as_int(raw.get("timeout_ms", 10000)),
-            paper_width_chars=_as_int(raw.get("paper_width_chars", 32)),
+            paper_width_chars=columns,
             open_drawer=bool(raw.get("open_drawer", False)),
+            mode=mode,
+            name=str(raw.get("name", "") or ""),
+            host=str(raw.get("host", "") or ""),
+            port=_as_int(raw.get("port", 9100)),
+            paper_width_mm=paper_width_mm,
+            cut=bool(raw.get("cut", True)),
         )
     except ValueError as exc:
         raise ConfigError(f"Valor inválido en la sección printer de {CONFIG_FILE}: {exc}") from exc
+
+
+def _window_from(raw: dict) -> WindowSettings:
+    try:
+        return WindowSettings(
+            maximized=bool(raw.get("maximized", True)),
+            width=max(800, _as_int(raw.get("width", 1520))),
+            height=max(500, _as_int(raw.get("height", 750))),
+        )
+    except ValueError as exc:
+        raise ConfigError(f"Valor inválido en la sección window de {CONFIG_FILE}: {exc}") from exc
 
 
 def _backup_from(raw: dict) -> BackupSettings:

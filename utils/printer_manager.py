@@ -1,4 +1,8 @@
-"""Impresión de recibos en impresora térmica ESC/POS por USB.
+"""Impresión de recibos en impresoras térmicas ESC/POS.
+
+Tres formas de llegar a la impresora, según ``printer.mode`` en config.json:
+instalada en Windows (se le envía ESC/POS crudo por el spooler, sirve por
+USB, red o Bluetooth), de red por IP (puerto 9100) o USB directo con libusb.
 
 Este módulo no conoce la interfaz gráfica: no abre diálogos ni bloquea nada.
 Si la impresora falla lanza PrinterError y el controlador decide qué mostrar.
@@ -9,6 +13,7 @@ se puede probar sin impresora.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
@@ -16,12 +21,69 @@ from decimal import Decimal
 from model.errors import PrinterError
 from model.receipt import PAYMENT_CASH, Receipt
 from model.shift import Shift, ShiftSummary
-from utils.config import BusinessSettings, PrinterSettings
+from utils.config import MODE_NETWORK, MODE_USB, MODE_WINDOWS, BusinessSettings, PrinterSettings
 from utils.formatters import format_price
 
 logger = logging.getLogger(__name__)
 
 ESC_RESET = b"\x1b\x40"
+MODE_NAMES = {MODE_WINDOWS: "Impresora de Windows", MODE_NETWORK: "Red", MODE_USB: "USB directo"}
+
+
+def list_windows_printers() -> list[str]:
+    """Nombres de las impresoras instaladas en Windows (vacío si no se puede consultar)."""
+    try:
+        import win32print
+    except ImportError:
+        return []
+    try:
+        flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+        return [entry[2] for entry in win32print.EnumPrinters(flags)]
+    except Exception:
+        logger.warning("No se pudieron listar las impresoras de Windows", exc_info=True)
+        return []
+
+
+def default_windows_printer() -> str:
+    try:
+        import win32print
+
+        return win32print.GetDefaultPrinter()
+    except Exception:
+        return ""
+
+
+def describe_connection(settings: PrinterSettings) -> str:
+    """Texto corto de cómo está conectada la impresora, para el tiquete de prueba y los mensajes."""
+    if settings.mode == MODE_WINDOWS:
+        return f"{MODE_NAMES[MODE_WINDOWS]}: {settings.name or 'predeterminada'}"
+    if settings.mode == MODE_NETWORK:
+        return f"{MODE_NAMES[MODE_NETWORK]}: {settings.host}:{settings.port}"
+    return f"{MODE_NAMES[MODE_USB]}: {settings.vendor_id:#06x}:{settings.product_id:#06x}"
+
+
+def render_test_ticket(business: BusinessSettings, settings: PrinterSettings, when: dt.datetime | None = None) -> list:
+    """Tiquete de prueba: si la regla llega al borde derecho, el ancho de papel configurado es correcto."""
+    width = settings.paper_width_chars
+    now = when or dt.datetime.now()
+    separator = ReceiptLine("-" * width)
+    ruler = "".join(str(index % 10) for index in range(1, width + 1))
+    return [
+        ReceiptLine(business.name.upper()[:width], "center", bold=True),
+        ReceiptLine("PRUEBA DE IMPRESION", "center", bold=True),
+        separator,
+        ReceiptLine(f"FECHA: {now:%Y-%m-%d %H:%M}"),
+        ReceiptLine(f"PAPEL: {settings.paper_width_mm} mm ({width} columnas)"[:width]),
+        ReceiptLine(describe_connection(settings)[:width]),
+        separator,
+        ReceiptLine(ruler),
+        separator,
+        ReceiptLine("Si la linea de numeros llega"),
+        ReceiptLine("completa al borde derecho, el"),
+        ReceiptLine("ancho de papel es correcto."),
+        ReceiptLine(""),
+        ReceiptLine("Impresora lista.", "center", bold=True),
+    ]
 
 
 @dataclass(frozen=True)
@@ -161,7 +223,12 @@ class ReceiptPrinter:
         finally:
             _close_quietly(device)
 
-    def print_lines(self, lines: list[ReceiptLine], what: str = "tiquete") -> None:
+    def print_test(self) -> None:
+        """Imprime el tiquete de prueba aunque la impresión esté desactivada; abre el cajón si está configurado."""
+        lines = render_test_ticket(self._business, self._printer)
+        self.print_lines(lines, "tiquete de prueba", pulse_drawer=self._printer.open_drawer)
+
+    def print_lines(self, lines: list[ReceiptLine], what: str = "tiquete", pulse_drawer: bool = False) -> None:
         device = self._open()
         try:
             device._raw(ESC_RESET)
@@ -169,32 +236,62 @@ class ReceiptPrinter:
                 device.set(align=line.align, bold=line.bold)
                 device.text(line.text + "\n")
             device.text("\n\n")
-            device.cut()
-        except Exception as exc:  # la librería lanza tipos variados según el fallo USB
+            if self._printer.cut:
+                device.cut()
+            else:
+                device.text("\n\n\n")
+            if pulse_drawer:
+                device.cashdraw(2)
+        except Exception as exc:  # la librería lanza tipos variados según el fallo
             logger.error("Error imprimiendo %s", what, exc_info=True)
             raise PrinterError(f"No se pudo imprimir el {what}: {exc}") from exc
         finally:
             _close_quietly(device)
 
     def _open(self):
-        try:
-            from escpos.printer import Usb
-        except ImportError as exc:
-            raise PrinterError("La librería de impresión (python-escpos) no está instalada.") from exc
+        """Abre la conexión según el modo configurado. Lanza PrinterError con un mensaje accionable."""
         s = self._printer
         try:
-            return Usb(
-                idVendor=s.vendor_id,
-                idProduct=s.product_id,
-                timeout=s.timeout_ms,
-                in_ep=s.in_ep,
-                out_ep=s.out_ep,
-            )
+            from escpos import printer as backends
+        except ImportError as exc:
+            raise PrinterError("La librería de impresión (python-escpos) no está instalada.") from exc
+        if s.mode == MODE_WINDOWS:
+            if not backends.Win32Raw.is_usable():
+                raise PrinterError("Falta el componente pywin32 para imprimir por Windows. Reinstale la aplicación.")
+            device = backends.Win32Raw(s.name)
+            try:
+                device.open(job_name="SistemaPOS")
+            except Exception as exc:
+                logger.error("No se pudo abrir la impresora de Windows", exc_info=True)
+                which = f"'{s.name}'" if s.name else "predeterminada"
+                raise PrinterError(
+                    f"No se pudo usar la impresora de Windows {which}. Verifique que esté instalada, encendida "
+                    "y sin trabajos atascados en la cola de impresión."
+                ) from exc
+            return device
+        if s.mode == MODE_NETWORK:
+            device = backends.Network(s.host, s.port, timeout=max(2, s.timeout_ms / 1000))
+            try:
+                device.open()
+            except Exception as exc:
+                logger.error("No se pudo conectar con la impresora de red", exc_info=True)
+                raise PrinterError(
+                    f"No responde la impresora de red en {s.host}:{s.port}. "
+                    "Verifique la IP, el cable y que esté encendida."
+                ) from exc
+            return device
+        device = backends.Usb(
+            idVendor=s.vendor_id, idProduct=s.product_id, timeout=s.timeout_ms, in_ep=s.in_ep, out_ep=s.out_ep
+        )
+        try:
+            device.open()
         except Exception as exc:
             logger.error("No se pudo abrir la impresora USB", exc_info=True)
             raise PrinterError(
-                "No se encontró la impresora. Verifique que esté encendida y conectada por USB."
+                "No se encontró la impresora USB. Verifique que esté encendida, que los IDs de config.json sean "
+                "los de la impresora y que tenga el controlador WinUSB (Zadig)."
             ) from exc
+        return device
 
 
 def _grouped_items(receipt: Receipt) -> list[tuple[str, int, Decimal, Decimal]]:

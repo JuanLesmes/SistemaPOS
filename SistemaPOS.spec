@@ -13,7 +13,7 @@ a = Analysis(
         ("config.example.json", "."),
         (".env.example", "."),
     ],
-    hiddenimports=["usb.backend.libusb1"],
+    hiddenimports=["usb.backend.libusb1", "win32print", "pywintypes", "win32timezone"],
     hookspath=["hooks"],
     hooksconfig={},
     runtime_hooks=["runtime-hook-escpos.py"],

@@ -62,7 +62,9 @@ y `view/widgets.py`; cualquier cambio visual global se hace ahí.
 - PostgreSQL 14 o superior instalado en el equipo. Las copias de seguridad
   usan pg_dump y pg_restore de la carpeta bin de PostgreSQL; la aplicación
   los busca sola en Program Files.
-- Impresora térmica USB compatible con ESC/POS (opcional; se puede desactivar).
+- Impresora térmica compatible con ESC/POS (opcional; se puede desactivar). Se instala en
+  Windows como cualquier impresora, por USB, red o Bluetooth, y la aplicación le envía
+  los comandos por el spooler; también admite impresoras de red por IP y USB directo.
 
 ## Configuración
 
@@ -76,13 +78,17 @@ asistente de configuración los escribe; también se pueden editar a mano:
    esa clave si no hay usuarios; después se administran desde la pantalla
    Usuarios.
 2. `config.json`: datos del negocio que salen en el recibo (`business`, con
-   `logo` opcional apuntando a un PNG o JPG), parámetros de la impresora
-   (`printer`, con `open_drawer` para el cajón monedero) y copias de seguridad
-   (`backup`: `enabled`, `directory`, `keep`, `pg_bin`).
+   `logo` opcional apuntando a un PNG o JPG), impresora (`printer`: `mode`
+   `windows`, `network` o `usb`; `name` de la impresora en Windows o `host`
+   de la impresora de red; `paper_width_mm` 80 o 58; `cut`; `open_drawer`
+   para el cajón monedero), copias de seguridad (`backup`: `enabled`,
+   `directory`, `keep`, `pg_bin`) y ventana (`window`: `maximized`, `width`,
+   `height`; se actualiza sola al cerrar).
 
-Para identificar la impresora: `python scripts/find_usb.py` muestra los IDs
-USB; `python scripts/list_endpoints.py` muestra los endpoints; y
-`python scripts/test_printer.py` imprime un recibo de prueba.
+`python scripts/test_printer.py` lista las impresoras instaladas e imprime el
+tiquete de prueba con la configuración actual. Solo para el modo USB directo:
+`python scripts/find_usb.py` muestra los IDs USB y `python scripts/list_endpoints.py`
+los endpoints.
 
 Las tablas se crean y actualizan solas al iniciar, con las migraciones de la
 carpeta `migrations/`.

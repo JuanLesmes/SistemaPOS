@@ -81,3 +81,43 @@ def test_backup_section_has_defaults_and_overrides(tmp_path):
     assert custom.enabled is False
     assert custom.directory == "D:/copias"
     assert custom.keep == 7
+
+
+def test_printer_modes_paper_width_and_window(tmp_path):
+    write_files(
+        tmp_path, "DB_PASSWORD=x\n", {"printer": {"mode": "network", "host": "192.168.0.50", "paper_width_mm": 58}}
+    )
+    printer = load_settings(tmp_path).printer
+    assert printer.mode == "network" and printer.host == "192.168.0.50" and printer.port == 9100
+    assert printer.paper_width_mm == 58 and printer.paper_width_chars == 32
+
+    write_files(tmp_path, "DB_PASSWORD=x\n", {"printer": {"name": "POS-80", "paper_width_chars": 42}})
+    printer = load_settings(tmp_path).printer
+    assert printer.mode == "windows" and printer.name == "POS-80"
+    assert printer.paper_width_mm == 80 and printer.paper_width_chars == 42, "un valor explícito manda"
+    assert printer.cut is True
+
+    write_files(tmp_path, "DB_PASSWORD=x\n", {"printer": {"mode": "fax"}})
+    with pytest.raises(ConfigError, match="printer.mode"):
+        load_settings(tmp_path)
+
+    write_files(tmp_path, "DB_PASSWORD=x\n", {})
+    window = load_settings(tmp_path).window
+    assert window.maximized is True and window.geometry == "1520x750"
+
+    write_files(tmp_path, "DB_PASSWORD=x\n", {"window": {"maximized": False, "width": 1366, "height": 768}})
+    window = load_settings(tmp_path).window
+    assert window.maximized is False and window.geometry == "1366x768"
+
+
+def test_save_window_state_keeps_the_rest_of_the_config(tmp_path):
+    from utils.config import save_window_state
+
+    write_files(tmp_path, "DB_PASSWORD=x\n", {"business": {"name": "Tienda"}, "window": {"maximized": True}})
+    save_window_state(tmp_path, maximized=False, width=1400, height=800)
+    settings = load_settings(tmp_path)
+    assert settings.business.name == "Tienda"
+    assert settings.window.maximized is False and settings.window.geometry == "1400x800"
+    save_window_state(tmp_path, maximized=True, width=1900, height=1000)
+    settings = load_settings(tmp_path)
+    assert settings.window.maximized is True and settings.window.geometry == "1400x800", "maximizada no pisa el tamaño"

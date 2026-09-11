@@ -27,7 +27,8 @@ from model.product import Product
 from model.receipt import Receipt
 from model.shift import Shift, ShiftSummary
 from model.user import User
-from utils.config import Settings
+from utils.config import Settings, save_window_state
+from utils.paths import app_dir
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +101,17 @@ class MainController:
     def on_close(self) -> None:
         logger.info("Cerrando aplicación")
         self.sales_controller.on_hide()
+        self._remember_window()
         self.db.close()
         self.root.destroy()
+
+    def _remember_window(self) -> None:
+        """Guarda si la ventana estaba maximizada y su tamaño, para abrirla igual la próxima vez."""
+        try:
+            maximized = self.root.state() == "zoomed"
+            save_window_state(app_dir(), maximized, self.root.winfo_width(), self.root.winfo_height())
+        except Exception:
+            logger.warning("No se pudo guardar el estado de la ventana", exc_info=True)
 
     # ------------------------------------------------------------------ sesión
     def on_login(self, user: User) -> None:
